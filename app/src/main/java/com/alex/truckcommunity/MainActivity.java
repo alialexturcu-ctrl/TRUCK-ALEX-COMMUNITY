@@ -5,6 +5,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -54,6 +55,8 @@ public class MainActivity extends Activity {
 
     private Location lastLocation;
 
+    private TextView poiStatus;
+
     private final ArrayList<Marker> poiMarkers =
             new ArrayList<>();
 
@@ -61,6 +64,9 @@ public class MainActivity extends Activity {
             Executors.newSingleThreadExecutor();
 
     private static final int GPS_PERMISSION = 100;
+
+    private static final String OVERPASS_URL =
+            "https://overpass.private.coffee/api/interpreter";
 
     private final LocationListener locationListener = location -> {
         lastLocation = location;
@@ -140,6 +146,24 @@ public class MainActivity extends Activity {
         });
     }
 
+    private Button createPoiButton(String text) {
+
+        Button button = new Button(this);
+
+        button.setText(text);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(13);
+        button.setAllCaps(false);
+
+        button.setBackgroundTintList(
+                ColorStateList.valueOf(Color.rgb(25, 105, 190))
+        );
+
+        button.setPadding(3, 5, 3, 5);
+
+        return button;
+    }
+
     private void showMap() {
 
         LinearLayout screen = new LinearLayout(this);
@@ -171,36 +195,42 @@ public class MainActivity extends Activity {
         searchRow.addView(searchInput,
                 new LinearLayout.LayoutParams(0, 55, 1));
 
-        Button searchButton = new Button(this);
-        searchButton.setText("CAUTA");
+        Button searchButton = createPoiButton("CAUTA");
 
         searchRow.addView(searchButton,
-                new LinearLayout.LayoutParams(-2, 55));
+                new LinearLayout.LayoutParams(90, 55));
 
         screen.addView(searchRow);
 
         LinearLayout poiRow = new LinearLayout(this);
         poiRow.setOrientation(LinearLayout.HORIZONTAL);
+        poiRow.setPadding(4, 3, 4, 3);
 
-        Button parkingButton = new Button(this);
-        parkingButton.setText("PARCARI");
-
-        Button fuelButton = new Button(this);
-        fuelButton.setText("MOTORINA");
-
-        Button serviceButton = new Button(this);
-        serviceButton.setText("SERVICE");
+        Button parkingButton = createPoiButton("PARCARI TIR");
+        Button fuelButton = createPoiButton("MOTORINA");
+        Button serviceButton = createPoiButton("SERVICE");
 
         poiRow.addView(parkingButton,
-                new LinearLayout.LayoutParams(0, 55, 1));
+                new LinearLayout.LayoutParams(0, 60, 1));
 
         poiRow.addView(fuelButton,
-                new LinearLayout.LayoutParams(0, 55, 1));
+                new LinearLayout.LayoutParams(0, 60, 1));
 
         poiRow.addView(serviceButton,
-                new LinearLayout.LayoutParams(0, 55, 1));
+                new LinearLayout.LayoutParams(0, 60, 1));
 
         screen.addView(poiRow);
+
+        poiStatus = new TextView(this);
+        poiStatus.setText("Alege o categorie pentru cautare.");
+        poiStatus.setTextColor(Color.WHITE);
+        poiStatus.setTextSize(13);
+        poiStatus.setGravity(Gravity.CENTER);
+        poiStatus.setPadding(5, 7, 5, 7);
+        poiStatus.setBackgroundColor(Color.rgb(35, 45, 60));
+
+        screen.addView(poiStatus,
+                new LinearLayout.LayoutParams(-1, 38));
 
         mapView = new MapView(this);
         mapView.onCreate(null);
@@ -449,7 +479,7 @@ public class MainActivity extends Activity {
         final double lat = center.getLatitude();
         final double lon = center.getLongitude();
 
-        showMessage("Cautam locurile din apropiere...");
+        poiStatus.setText("Se cauta locurile...");
 
         executor.execute(() -> {
 
@@ -487,20 +517,24 @@ public class MainActivity extends Activity {
                         filters +
                         ");out center;";
 
-                URL url = new URL(
-                        "https://overpass-api.de/api/interpreter"
-                );
+                URL url = new URL(OVERPASS_URL);
 
                 connection =
                         (HttpURLConnection) url.openConnection();
 
                 connection.setRequestMethod("POST");
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(30000);
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(40000);
                 connection.setDoOutput(true);
+
                 connection.setRequestProperty(
                         "Content-Type",
                         "application/x-www-form-urlencoded"
+                );
+
+                connection.setRequestProperty(
+                        "User-Agent",
+                        "GPS-ALEX-TRUCK-NAVI/1.0"
                 );
 
                 String data = "data=" +
@@ -512,8 +546,13 @@ public class MainActivity extends Activity {
                     output.write(data.getBytes("UTF-8"));
                 }
 
-                if (connection.getResponseCode() != 200) {
-                    throw new IOException("Server error");
+                int responseCode =
+                        connection.getResponseCode();
+
+                if (responseCode != 200) {
+                    throw new IOException(
+                            "Server HTTP " + responseCode
+                    );
                 }
 
                 java.io.InputStream input =
@@ -598,11 +637,18 @@ public class MainActivity extends Activity {
 
             } catch (Exception e) {
 
-                runOnUiThread(() ->
-                        showMessage(
-                                "Nu am putut incarca locurile. Verifica internetul si incearca din nou."
-                        )
-                );
+                final String errorMessage =
+                        e.getMessage() == null
+                                ? "Eroare necunoscuta"
+                                : e.getMessage();
+
+                runOnUiThread(() -> {
+                    if (poiStatus != null) {
+                        poiStatus.setText(
+                                "Eroare: " + errorMessage
+                        );
+                    }
+                });
 
                 return;
 
@@ -660,10 +706,11 @@ public class MainActivity extends Activity {
             poiMarkers.add(marker);
         }
 
-        showMessage(
-                "Am gasit " + places.size() +
-                " locuri in apropiere."
-        );
+        if (poiStatus != null) {
+            poiStatus.setText(
+                    "Au fost gasite " + places.size() + " locuri."
+            );
+        }
     }
 
     private void showMessage(String message) {
