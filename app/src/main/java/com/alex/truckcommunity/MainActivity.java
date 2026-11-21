@@ -10,8 +10,6 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.widget.Button;
@@ -47,6 +45,7 @@ public class MainActivity extends Activity {
     private TextView status;
     private EditText startInput;
     private EditText destinationInput;
+    private Button instructionsButton;
 
     private TextToSpeech tts;
     private boolean voiceReady = false;
@@ -55,11 +54,13 @@ public class MainActivity extends Activity {
     private Marker destinationMarker;
     private Polyline routeLine;
 
+    private String routeInstructions = "";
+
     private final ExecutorService executor =
             Executors.newSingleThreadExecutor();
 
-    private final Handler handler =
-            new Handler(Looper.getMainLooper());
+    private final android.os.Handler handler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
 
     private static final int LOCATION_PERMISSION = 100;
 
@@ -98,7 +99,6 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         title.setPadding(8, 14, 8, 14);
         title.setBackgroundColor(Color.rgb(23, 43, 58));
-
         root.addView(title);
 
         startInput = new EditText(this);
@@ -107,7 +107,6 @@ public class MainActivity extends Activity {
         startInput.setHintTextColor(Color.LTGRAY);
         startInput.setHint("Plecare (gol = poziția GPS)");
         startInput.setPadding(12, 8, 12, 8);
-
         root.addView(startInput);
 
         destinationInput = new EditText(this);
@@ -116,14 +115,18 @@ public class MainActivity extends Activity {
         destinationInput.setHintTextColor(Color.LTGRAY);
         destinationInput.setHint("Destinație: ex. Roma, Italia");
         destinationInput.setPadding(12, 8, 12, 8);
-
         root.addView(destinationInput);
 
         Button routeButton = new Button(this);
         routeButton.setText("CALCULEAZĂ TRASEUL");
         routeButton.setOnClickListener(v -> calculateRoute());
-
         root.addView(routeButton);
+
+        instructionsButton = new Button(this);
+        instructionsButton.setText("ASCULTĂ INSTRUCȚIUNILE");
+        instructionsButton.setEnabled(false);
+        instructionsButton.setOnClickListener(v -> readRouteInstructions());
+        root.addView(instructionsButton);
 
         status = new TextView(this);
         status.setText("Se pregătește harta...");
@@ -131,7 +134,6 @@ public class MainActivity extends Activity {
         status.setTextSize(14);
         status.setGravity(Gravity.CENTER);
         status.setPadding(8, 8, 8, 8);
-
         root.addView(status);
 
         map = new MapView(this);
@@ -192,7 +194,6 @@ public class MainActivity extends Activity {
         voiceButton.setOnClickListener(v ->
                 speak("Bine ai venit în Truck Alex Community.")
         );
-
         root.addView(voiceButton);
 
         TextView attribution = new TextView(this);
@@ -200,7 +201,6 @@ public class MainActivity extends Activity {
         attribution.setTextColor(Color.LTGRAY);
         attribution.setTextSize(10);
         attribution.setGravity(Gravity.CENTER);
-
         root.addView(attribution);
 
         setContentView(root);
@@ -232,6 +232,195 @@ public class MainActivity extends Activity {
                     "truck_voice"
             );
         }
+    }
+
+    private void readRouteInstructions() {
+
+        if (routeInstructions.isEmpty()) {
+            Toast.makeText(
+                    this,
+                    "Calculează mai întâi un traseu.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        if (!voiceReady) {
+            Toast.makeText(
+                    this,
+                    "Vocea în limba română nu este pregătită.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+
+        String[] instructions = routeInstructions.split("\n");
+
+        tts.stop();
+
+        for (int i = 0; i < instructions.length; i++) {
+
+            String instruction = instructions[i].trim();
+
+            if (!instruction.isEmpty()) {
+                tts.speak(
+                        instruction,
+                        i == 0
+                                ? TextToSpeech.QUEUE_FLUSH
+                                : TextToSpeech.QUEUE_ADD,
+                        null,
+                        "route_step_" + i
+                );
+            }
+        }
+    }
+
+    private String translateManeuver(JSONObject maneuver)
+            throws Exception {
+
+        String type = maneuver.optString("type", "");
+        String modifier = maneuver.optString("modifier", "");
+
+        switch (type) {
+
+            case "depart":
+                return "Porniți de la punctul de plecare.";
+
+            case "arrive":
+                return "Ați ajuns la destinație.";
+
+            case "turn":
+            case "end of road":
+            case "fork":
+                return directionText(modifier);
+
+            case "continue":
+                return "Continuați înainte.";
+
+            case "new name":
+                return "Continuați pe drumul următor.";
+
+            case "merge":
+                return "Încadrați-vă pe drumul principal.";
+
+            case "on ramp":
+                return "Intrați pe bretea.";
+
+            case "off ramp":
+                return "Ieșiți de pe bretea.";
+
+            case "roundabout":
+            case "rotary":
+                int exit = maneuver.optInt("exit", 0);
+
+                if (exit > 0) {
+                    return "Intrați în sensul giratoriu și ieșiți la a "
+                            + exit + "-a ieșire.";
+                }
+
+                return "Intrați în sensul giratoriu.";
+
+            case "roundabout turn":
+                return "Urmați traseul prin sensul giratoriu.";
+
+            case "uturn":
+                return "Întoarceți.";
+
+            default:
+                return "Continuați pe traseu.";
+        }
+    }
+
+    private String directionText(String modifier) {
+
+        switch (modifier) {
+
+            case "left":
+                return "Virați la stânga.";
+
+            case "right":
+                return "Virați la dreapta.";
+
+            case "slight left":
+                return "Virați ușor la stânga.";
+
+            case "slight right":
+                return "Virați ușor la dreapta.";
+
+            case "sharp left":
+                return "Virați puternic la stânga.";
+
+            case "sharp right":
+                return "Virați puternic la dreapta.";
+
+            case "uturn":
+                return "Întoarceți.";
+
+            default:
+                return "Continuați înainte.";
+        }
+    }
+
+    private String buildRouteInstructions(JSONObject route)
+            throws Exception {
+
+        StringBuilder result = new StringBuilder();
+
+        JSONArray legs = route.getJSONArray("legs");
+
+        for (int legIndex = 0;
+             legIndex < legs.length();
+             legIndex++) {
+
+            JSONObject leg = legs.getJSONObject(legIndex);
+            JSONArray steps = leg.getJSONArray("steps");
+
+            for (int i = 0; i < steps.length(); i++) {
+
+                JSONObject step = steps.getJSONObject(i);
+
+                JSONObject maneuver =
+                        step.getJSONObject("maneuver");
+
+                double distance =
+                        step.optDouble("distance", 0);
+
+                String instruction =
+                        translateManeuver(maneuver);
+
+                if (distance >= 50) {
+
+                    int meters = (int)
+                            (Math.round(distance / 50.0) * 50);
+
+                    result.append(
+                            "După aproximativ "
+                                    + meters
+                                    + " metri, "
+                                    + instruction
+                    );
+
+                } else {
+                    result.append(instruction);
+                }
+
+                String roadName = step.optString("name", "");
+
+                if (!roadName.isEmpty()) {
+                    result.append(" Drumul se numește ")
+                            .append(roadName)
+                            .append(".");
+                }
+
+                result.append("\n");
+            }
+        }
+
+        if (result.length() == 0) {
+            result.append("Nu există instrucțiuni disponibile.");
+        }
+
+        return result.toString();
     }
 
     private void checkLocationPermission() {
@@ -276,7 +465,6 @@ public class MainActivity extends Activity {
                 );
 
                 updateGPSMarker(currentPosition);
-
             }
 
         } catch (SecurityException e) {
@@ -312,7 +500,9 @@ public class MainActivity extends Activity {
             map.getController().animateTo(currentPosition);
             map.getController().setZoom(16.0);
         } else {
-            status.setText("Nu există încă o poziție GPS. Încearcă afară.");
+            status.setText(
+                    "Nu există încă o poziție GPS. Încearcă afară."
+            );
         }
     }
 
@@ -342,6 +532,13 @@ public class MainActivity extends Activity {
             }
         }
 
+        instructionsButton.setEnabled(false);
+        routeInstructions = "";
+
+        if (tts != null) {
+            tts.stop();
+        }
+
         status.setText("Se caută orașele și se calculează traseul...");
 
         executor.execute(() -> {
@@ -356,7 +553,6 @@ public class MainActivity extends Activity {
                     origin = searchCity(start);
                 }
 
-                // Pauză pentru respectarea limitei Nominatim.
                 if (!start.isEmpty()) {
                     Thread.sleep(1100);
                 }
@@ -365,11 +561,14 @@ public class MainActivity extends Activity {
 
                 JSONObject route = getRoute(origin, destinationPoint);
 
-                handler.post(() -> showRoute(
-                        origin,
-                        destinationPoint,
-                        route
-                ));
+                String instructions =
+                        buildRouteInstructions(route);
+
+                handler.post(() -> {
+                    showRoute(origin, destinationPoint, route);
+                    routeInstructions = instructions;
+                    instructionsButton.setEnabled(true);
+                });
 
             } catch (Exception e) {
 
@@ -387,8 +586,6 @@ public class MainActivity extends Activity {
         String address =
                 "https://nominatim.openstreetmap.org/search"
                 + "?format=jsonv2&limit=1&q=" + encoded;
-
-        JSONObject unused = null;
 
         JSONArray results = new JSONArray(httpGet(address));
 
