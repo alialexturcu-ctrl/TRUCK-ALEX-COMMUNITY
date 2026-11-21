@@ -5,6 +5,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -14,6 +16,8 @@ import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.EditText;
+import android.widget.Button;
 
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
@@ -21,12 +25,22 @@ import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.Marker;
 
+import java.util.List;
+import java.util.Locale;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MainActivity extends Activity {
 
     private LinearLayout home;
     private MapView mapView;
     private LocationManager locationManager;
     private Marker truckMarker;
+    private Marker destinationMarker;
+
+    private final ExecutorService executor =
+            Executors.newSingleThreadExecutor();
 
     private static final int GPS_PERMISSION = 100;
 
@@ -95,8 +109,7 @@ public class MainActivity extends Activity {
         panel.setBackgroundColor(Color.rgb(25, 105, 190));
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 95);
+                new LinearLayout.LayoutParams(-1, 95);
         params.setMargins(0, 0, 0, 14);
         home.addView(panel, params);
 
@@ -125,9 +138,28 @@ public class MainActivity extends Activity {
         back.setTextColor(Color.WHITE);
         back.setGravity(Gravity.CENTER);
         back.setBackgroundColor(Color.rgb(25, 105, 190));
+        screen.addView(back, new LinearLayout.LayoutParams(-1, 55));
 
-        screen.addView(back,
-                new LinearLayout.LayoutParams(-1, 60));
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setPadding(6, 6, 6, 6);
+
+        EditText searchInput = new EditText(this);
+        searchInput.setSingleLine(true);
+        searchInput.setTextSize(16);
+        searchInput.setHint("Oras sau coordonate: 45.4642, 9.1900");
+        searchInput.setBackgroundColor(Color.WHITE);
+        searchInput.setPadding(12, 4, 12, 4);
+
+        searchRow.addView(searchInput,
+                new LinearLayout.LayoutParams(0, 55, 1));
+
+        Button searchButton = new Button(this);
+        searchButton.setText("CAUTA");
+        searchRow.addView(searchButton,
+                new LinearLayout.LayoutParams(-2, 55));
+
+        screen.addView(searchRow);
 
         mapView = new MapView(this);
         mapView.setTileSource(TileSourceFactory.MAPNIK);
@@ -139,10 +171,105 @@ public class MainActivity extends Activity {
         screen.addView(mapView,
                 new LinearLayout.LayoutParams(-1, 0, 1));
 
+        searchButton.setOnClickListener(v -> {
+            String query = searchInput.getText().toString().trim();
+
+            if (query.isEmpty()) {
+                searchInput.setError("Scrie o destinatie");
+                return;
+            }
+
+            searchButton.setEnabled(false);
+            searchButton.setText("CAUT...");
+
+            executor.execute(() -> {
+                GeoPoint foundPoint = null;
+                String error = null;
+
+                try {
+                    String[] parts = query.split("[,;\\s]+");
+
+                    if (parts.length == 2) {
+                        try {
+                            double lat = Double.parseDouble(parts[0]);
+                            double lon = Double.parseDouble(parts[1]);
+
+                            if (lat >= -90 && lat <= 90
+                                    && lon >= -180 && lon <= 180) {
+                                foundPoint = new GeoPoint(lat, lon);
+                            } else {
+                                error = "Coordonate in afara limitelor.";
+                            }
+                        } catch (NumberFormatException e) {
+                            // Nu sunt coordonate; cautam ca adresa.
+                        }
+                    }
+
+                    if (foundPoint == null && error == null) {
+                        Geocoder geocoder =
+                                new Geocoder(this, Locale.getDefault());
+
+                        List<Address> results =
+                                geocoder.getFromLocationName(query, 1);
+
+                        if (results != null && !results.isEmpty()) {
+                            Address address = results.get(0);
+                            foundPoint = new GeoPoint(
+                                    address.getLatitude(),
+                                    address.getLongitude()
+                            );
+                        } else {
+                            error = "Destinatia nu a fost gasita.";
+                        }
+                    }
+
+                } catch (IOException e) {
+                    error = "Verifica conexiunea la internet.";
+                } catch (Exception e) {
+                    error = "Nu am putut cauta destinatia.";
+                }
+
+                final GeoPoint resultPoint = foundPoint;
+                final String resultError = error;
+
+                runOnUiThread(() -> {
+                    searchButton.setEnabled(true);
+                    searchButton.setText("CAUTA");
+
+                    if (mapView == null) return;
+
+                    if (resultPoint == null) {
+                        showMessage(resultError == null
+                                ? "Destinatia nu a fost gasita."
+                                : resultError);
+                        return;
+                    }
+
+                    if (destinationMarker != null) {
+                        mapView.getOverlays().remove(destinationMarker);
+                    }
+
+                    destinationMarker = new Marker(mapView);
+                    destinationMarker.setPosition(resultPoint);
+                    destinationMarker.setTitle("Destinatia cautata");
+                    destinationMarker.setAnchor(
+                            Marker.ANCHOR_CENTER,
+                            Marker.ANCHOR_BOTTOM
+                    );
+
+                    mapView.getOverlays().add(destinationMarker);
+                    mapView.getController().animateTo(resultPoint);
+                    mapView.getController().setZoom(14.0);
+                    mapView.invalidate();
+                });
+            });
+        });
+
         back.setOnClickListener(v -> {
             stopGps();
             mapView = null;
             truckMarker = null;
+            destinationMarker = null;
             showHome();
         });
 
@@ -162,6 +289,13 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void showMessage(String message) {
+        new AlertDialog.Builder(this)
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .show();
+    }
+
     private void startGps() {
         try {
             locationManager.requestLocationUpdates(
@@ -179,10 +313,7 @@ public class MainActivity extends Activity {
                 locationListener.onLocationChanged(last);
             }
         } catch (SecurityException e) {
-            new AlertDialog.Builder(this)
-                    .setMessage("Permisiunea GPS nu este activata.")
-                    .setPositiveButton("OK", null)
-                    .show();
+            showMessage("Permisiunea GPS nu este activata.");
         }
     }
 
@@ -205,10 +336,7 @@ public class MainActivity extends Activity {
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startGps();
             } else {
-                new AlertDialog.Builder(this)
-                        .setMessage("Fara permisiunea GPS, pozitia nu poate fi afisata.")
-                        .setPositiveButton("OK", null)
-                        .show();
+                showMessage("Fara permisiunea GPS, pozitia nu poate fi afisata.");
             }
         }
     }
@@ -224,5 +352,11 @@ public class MainActivity extends Activity {
         stopGps();
         if (mapView != null) mapView.onPause();
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        executor.shutdownNow();
+        super.onDestroy();
     }
 }
