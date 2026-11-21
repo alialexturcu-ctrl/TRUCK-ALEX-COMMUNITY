@@ -16,7 +16,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -66,10 +65,9 @@ public class MainActivity extends Activity {
 
     private static final int GPS_PERMISSION = 100;
 
-    private final int BLUE = Color.rgb(30, 75, 115);
+    private final int BLACK = Color.BLACK;
 
     private boolean mapOpened = false;
-    private boolean activityPaused = false;
 
     private static final String[] OVERPASS_SERVERS = {
             "https://overpass.kumi.systems/api/interpreter",
@@ -91,6 +89,11 @@ public class MainActivity extends Activity {
         }
     }
 
+    private int dp(float value) {
+        return (int) (value * getResources()
+                .getDisplayMetrics().density + 0.5f);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -104,36 +107,43 @@ public class MainActivity extends Activity {
         getGPS();
     }
 
-    // MENIUL PRINCIPAL
+    // MENIUL PRINCIPAL - OCUPA TOT ECRANUL
 
     private void showHome() {
 
         mapOpened = false;
 
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.WHITE);
+        root.setPadding(dp(12), dp(5), dp(12), dp(5));
+
+        // PARTEA DE SUS - BUTOANELE
+
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(true);
 
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(20, 20, 20, 25);
+        layout.setPadding(dp(5), dp(5), dp(5), dp(5));
         layout.setBackgroundColor(Color.WHITE);
 
         TextView title = new TextView(this);
         title.setText("GPS ALEX");
         title.setTextColor(Color.rgb(20, 45, 70));
-        title.setTextSize(30);
+        title.setTextSize(28);
         title.setGravity(Gravity.CENTER);
         title.setTypeface(null, Typeface.BOLD);
-        title.setPadding(5, 12, 5, 12);
-
+        title.setPadding(0, dp(5), 0, dp(2));
         layout.addView(title);
 
         TextView subtitle = new TextView(this);
         subtitle.setText("CAMION • GPS • NAVIGATIE");
         subtitle.setTextColor(Color.DKGRAY);
-        subtitle.setTextSize(16);
+        subtitle.setTextSize(14);
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(5, 0, 5, 15);
-
+        subtitle.setPadding(0, 0, 0, dp(5));
         layout.addView(subtitle);
 
         addButton("HARTA GPS", () -> showMap());
@@ -164,11 +174,10 @@ public class MainActivity extends Activity {
         TextView searchTitle = new TextView(this);
         searchTitle.setText("CAUTARE LOCATII");
         searchTitle.setTextColor(Color.rgb(20, 45, 70));
-        searchTitle.setTextSize(20);
+        searchTitle.setTextSize(18);
         searchTitle.setTypeface(null, Typeface.BOLD);
         searchTitle.setGravity(Gravity.CENTER);
-        searchTitle.setPadding(5, 22, 5, 10);
-
+        searchTitle.setPadding(0, dp(7), 0, dp(4));
         layout.addView(searchTitle);
 
         addButton("PARCARI TIR", () -> searchPlaces("parking"));
@@ -178,66 +187,99 @@ public class MainActivity extends Activity {
         status = new TextView(this);
         status.setText("GPS ALEX pregatit pentru navigare");
         status.setTextColor(Color.DKGRAY);
-        status.setTextSize(15);
+        status.setTextSize(13);
         status.setGravity(Gravity.CENTER);
-        status.setPadding(5, 12, 5, 12);
-
+        status.setPadding(0, dp(4), 0, dp(4));
         layout.addView(status);
 
-        // HARTA DIN MENIUL PRINCIPAL
+        scroll.addView(layout);
+
+        root.addView(scroll,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        0, 7));
+
+        // PARTEA DE JOS - HARTA GPS
+
+        LinearLayout mapContainer = new LinearLayout(this);
+        mapContainer.setOrientation(LinearLayout.VERTICAL);
+        mapContainer.setBackgroundColor(Color.WHITE);
 
         TextView mapTitle = new TextView(this);
         mapTitle.setText("HARTA GPS - POZITIA CAMIONULUI");
         mapTitle.setTextColor(Color.rgb(20, 45, 70));
-        mapTitle.setTextSize(18);
+        mapTitle.setTextSize(16);
         mapTitle.setTypeface(null, Typeface.BOLD);
         mapTitle.setGravity(Gravity.CENTER);
-        mapTitle.setPadding(5, 15, 5, 12);
+        mapTitle.setPadding(0, dp(5), 0, dp(5));
 
-        layout.addView(mapTitle);
+        mapContainer.addView(mapTitle,
+                new LinearLayout.LayoutParams(-1, dp(35)));
 
         mapView = new MapView(this);
 
-        layout.addView(mapView,
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 280));
+        mapContainer.addView(mapView,
+                new LinearLayout.LayoutParams(-1, 0, 1));
 
-        scroll.addView(layout);
-        setContentView(scroll);
+        root.addView(mapContainer,
+                new LinearLayout.LayoutParams(-1, 0, 3));
+
+        setContentView(root);
 
         initializeMap();
     }
 
-    // BUTOANE
+    // BUTOANE NEGRE CU TEXT ALB
 
     private void addButton(String name, Runnable action) {
 
-        Button button = new Button(this);
+        TextView button = new TextView(this);
 
         button.setText(name);
         button.setTextColor(Color.WHITE);
-        button.setTextSize(18);
-        button.setAllCaps(true);
+        button.setTextSize(17);
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
-        button.setVisibility(View.VISIBLE);
+        button.setAllCaps(false);
+        button.setClickable(true);
+        button.setFocusable(true);
 
         GradientDrawable background = new GradientDrawable();
-        background.setColor(BLUE);
-        background.setCornerRadius(20);
-        background.setStroke(2, Color.rgb(70, 150, 210));
+        background.setColor(BLACK);
+        background.setCornerRadius(dp(12));
+        background.setStroke(dp(1), Color.DKGRAY);
 
         button.setBackground(background);
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 70);
+                new LinearLayout.LayoutParams(-1, dp(48));
 
-        params.setMargins(0, 7, 0, 7);
+        params.setMargins(0, dp(3), 0, dp(3));
 
         layout.addView(button, params);
 
         button.setOnClickListener(v -> action.run());
+    }
+
+    private TextView createActionButton(String name) {
+
+        TextView button = new TextView(this);
+
+        button.setText(name);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(16);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setGravity(Gravity.CENTER);
+        button.setClickable(true);
+        button.setFocusable(true);
+
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(BLACK);
+        background.setCornerRadius(dp(10));
+
+        button.setBackground(background);
+
+        return button;
     }
 
     private void showMessage(String title, String message) {
@@ -256,10 +298,7 @@ public class MainActivity extends Activity {
 
         mapView.onCreate(null);
         mapView.onStart();
-
-        if (!activityPaused) {
-            mapView.onResume();
-        }
+        mapView.onResume();
 
         mapView.getMapAsync(mapLibreMap -> {
 
@@ -311,7 +350,10 @@ public class MainActivity extends Activity {
     private void searchPlaces(String category) {
 
         if (latitude == 0 || longitude == 0) {
-            status.setText("Asteptam pozitia GPS...");
+            if (status != null) {
+                status.setText("Asteptam pozitia GPS...");
+            }
+
             getGPS();
 
             Toast.makeText(this,
@@ -320,7 +362,9 @@ public class MainActivity extends Activity {
             return;
         }
 
-        status.setText("Se cauta locatii pe 25 km...");
+        if (status != null) {
+            status.setText("Se cauta locatii pe 25 km...");
+        }
 
         final double searchLat = latitude;
         final double searchLon = longitude;
@@ -427,7 +471,10 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
 
                 runOnUiThread(() -> {
-                    status.setText("Cautarea nu este disponibila momentan.");
+
+                    if (status != null) {
+                        status.setText("Cautarea nu este disponibila momentan.");
+                    }
 
                     Toast.makeText(this,
                             "Serverele de cautare nu au raspuns. Incearca mai tarziu.",
@@ -541,57 +588,48 @@ public class MainActivity extends Activity {
 
         LinearLayout screen = new LinearLayout(this);
         screen.setOrientation(LinearLayout.VERTICAL);
+        screen.setPadding(dp(8), dp(5), dp(8), dp(5));
         screen.setBackgroundColor(Color.WHITE);
 
-        Button back = new Button(this);
-        back.setText("INAPOI LA GPS ALEX");
-        back.setTextColor(Color.WHITE);
-        back.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(BLUE));
+        TextView back = createActionButton("INAPOI LA GPS ALEX");
 
-        screen.addView(back);
+        screen.addView(back,
+                new LinearLayout.LayoutParams(-1, dp(45)));
 
         addressInput = new EditText(this);
         addressInput.setSingleLine(true);
         addressInput.setTextSize(16);
         addressInput.setHint("Cauta adresa sau localitatea...");
-        addressInput.setPadding(15, 8, 15, 8);
+        addressInput.setPadding(dp(15), dp(8), dp(15), dp(8));
 
         screen.addView(addressInput,
-                new LinearLayout.LayoutParams(-1, 55));
+                new LinearLayout.LayoutParams(-1, dp(50)));
 
-        Button addressButton = new Button(this);
-        addressButton.setText("CAUTA ADRESA");
-        addressButton.setTextColor(Color.WHITE);
-        addressButton.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(BLUE));
+        TextView addressButton = createActionButton("CAUTA ADRESA");
 
-        screen.addView(addressButton);
+        screen.addView(addressButton,
+                new LinearLayout.LayoutParams(-1, dp(42)));
 
         coordinateInput = new EditText(this);
         coordinateInput.setSingleLine(true);
         coordinateInput.setTextSize(16);
         coordinateInput.setHint("Coordonate: 45.4642, 9.1900");
-        coordinateInput.setPadding(15, 8, 15, 8);
+        coordinateInput.setPadding(dp(15), dp(8), dp(15), dp(8));
 
         screen.addView(coordinateInput,
-                new LinearLayout.LayoutParams(-1, 55));
+                new LinearLayout.LayoutParams(-1, dp(50)));
 
-        Button coordinateButton = new Button(this);
-        coordinateButton.setText("CAUTA COORDONATE");
-        coordinateButton.setTextColor(Color.WHITE);
-        coordinateButton.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(BLUE));
+        TextView coordinateButton =
+                createActionButton("CAUTA COORDONATE");
 
-        screen.addView(coordinateButton);
+        screen.addView(coordinateButton,
+                new LinearLayout.LayoutParams(-1, dp(42)));
 
-        Button navigateButton = new Button(this);
-        navigateButton.setText("NAVIGHEAZA LA DESTINATIE");
-        navigateButton.setTextColor(Color.WHITE);
-        navigateButton.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(BLUE));
+        TextView navigateButton =
+                createActionButton("NAVIGHEAZA LA DESTINATIE");
 
-        screen.addView(navigateButton);
+        screen.addView(navigateButton,
+                new LinearLayout.LayoutParams(-1, dp(42)));
 
         mapView = new MapView(this);
 
@@ -802,31 +840,13 @@ public class MainActivity extends Activity {
                 updateTruckPosition();
             }
 
+            locationManager.removeUpdates(locationListener);
+
             locationManager.requestLocationUpdates(
                     provider,
                     5000,
                     10,
-                    new LocationListener() {
-
-                        @Override
-                        public void onLocationChanged(Location loc) {
-
-                            latitude = loc.getLatitude();
-                            longitude = loc.getLongitude();
-
-                            updateTruckPosition();
-                        }
-
-                        @Override
-                        public void onProviderEnabled(String provider) {}
-
-                        @Override
-                        public void onProviderDisabled(String provider) {}
-
-                        @Override
-                        public void onStatusChanged(
-                                String provider, int status, Bundle extras) {}
-                    });
+                    locationListener);
 
         } catch (Exception e) {
 
@@ -835,6 +855,27 @@ public class MainActivity extends Activity {
             }
         }
     }
+
+    private final LocationListener locationListener =
+            new LocationListener() {
+
+                @Override
+                public void onLocationChanged(Location loc) {
+                    latitude = loc.getLatitude();
+                    longitude = loc.getLongitude();
+                    updateTruckPosition();
+                }
+
+                @Override
+                public void onProviderEnabled(String provider) {}
+
+                @Override
+                public void onProviderDisabled(String provider) {}
+
+                @Override
+                public void onStatusChanged(
+                        String provider, int status, Bundle extras) {}
+            };
 
     // GESTIONAREA HARTII
 
@@ -854,9 +895,7 @@ public class MainActivity extends Activity {
     private void returnHome() {
 
         destroyCurrentMap();
-
         mapOpened = false;
-
         showHome();
     }
 
@@ -874,8 +913,6 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
 
-        activityPaused = true;
-
         if (mapView != null) {
             mapView.onPause();
         }
@@ -884,8 +921,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-
-        activityPaused = false;
 
         if (mapView != null) {
             mapView.onResume();
@@ -908,26 +943,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private final LocationListener locationListener =
-            new LocationListener() {
-                @Override
-                public void onLocationChanged(Location loc) {
-                    latitude = loc.getLatitude();
-                    longitude = loc.getLongitude();
-                    updateTruckPosition();
-                }
-
-                @Override
-                public void onProviderEnabled(String provider) {}
-
-                @Override
-                public void onProviderDisabled(String provider) {}
-
-                @Override
-                public void onStatusChanged(
-                        String provider, int status, Bundle extras) {}
-            };
-
     @Override
     public void onLowMemory() {
         super.onLowMemory();
@@ -946,10 +961,24 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(
                 requestCode, permissions, grantResults);
 
-        if (requestCode == GPS_PERMISSION
-                && grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            getGPS();
+        if (requestCode == GPS_PERMISSION) {
+
+            boolean granted = false;
+
+            for (int result : grantResults) {
+                if (result == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
+            }
+
+            if (granted) {
+                getGPS();
+            } else {
+                Toast.makeText(this,
+                        "Permisiunea GPS nu a fost acordata.",
+                        Toast.LENGTH_LONG).show();
+            }
         }
     }
 }
