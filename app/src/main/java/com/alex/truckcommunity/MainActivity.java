@@ -1,170 +1,316 @@
 
 package com.alex.truckcommunity;
 
-import android.app.Activity;
-import android.os.Bundle;
 import android.Manifest;
+import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
+import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
-import android.graphics.Color;
 import android.view.Gravity;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Button;
+import android.widget.Toast;
+
+import org.osmdroid.config.Configuration;
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.Marker;
 
 import java.util.Locale;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements LocationListener {
 
-    private TextView speedText;
-    private TextView gpsText;
-    private TextView statusText;
-
+    private MapView map;
     private LocationManager locationManager;
-    private TextToSpeech voice;
+    private TextToSpeech tts;
+    private TextView status;
+    private Marker truckMarker;
+
     private boolean voiceReady = false;
 
-    private final LocationListener locationListener =
-            new LocationListener() {
-                @Override
-                public void onLocationChanged(Location location) {
-                    updateGPS(location);
-                }
-            };
+    private static final int LOCATION_PERMISSION = 100;
+
+    private final GeoPoint defaultPosition =
+            new GeoPoint(45.0, 10.0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        createInterface();
+        Configuration.getInstance().load(
+                getApplicationContext(),
+                androidx.preference.PreferenceManager
+                        .getDefaultSharedPreferences(getApplicationContext())
+        );
 
-        voice = new TextToSpeech(this, result -> {
-            if (result == TextToSpeech.SUCCESS) {
-                int language = voice.setLanguage(new Locale("ro", "RO"));
-                voiceReady = language != TextToSpeech.LANG_MISSING_DATA
-                        && language != TextToSpeech.LANG_NOT_SUPPORTED;
-            }
-        });
+        Configuration.getInstance().setUserAgentValue(getPackageName());
 
         locationManager = (LocationManager)
-                getSystemService(LOCATION_SERVICE);
+                getSystemService(Context.LOCATION_SERVICE);
 
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
-            startGPS();
-        } else {
-            requestPermissions(
-                    new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                    }, 100);
-        }
+        createInterface();
+        initializeVoice();
+        checkLocationPermission();
     }
 
     private void createInterface() {
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setGravity(Gravity.CENTER);
-        layout.setPadding(25, 30, 25, 30);
-        layout.setBackgroundColor(Color.rgb(15, 23, 35));
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(16, 24, 32));
 
         TextView title = new TextView(this);
         title.setText("TRUCK ALEX COMMUNITY");
-        title.setTextSize(25);
         title.setTextColor(Color.WHITE);
+        title.setTextSize(20);
         title.setGravity(Gravity.CENTER);
+        title.setPadding(8, 15, 8, 15);
+        title.setBackgroundColor(Color.rgb(23, 43, 58));
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("GPS PENTRU CAMIOANE");
-        subtitle.setTextSize(15);
-        subtitle.setTextColor(Color.LTGRAY);
-        subtitle.setGravity(Gravity.CENTER);
+        root.addView(title);
 
-        speedText = new TextView(this);
-        speedText.setText("0 km/h");
-        speedText.setTextSize(54);
-        speedText.setTextColor(Color.GREEN);
-        speedText.setGravity(Gravity.CENTER);
+        status = new TextView(this);
+        status.setText("Se pregătește harta...");
+        status.setTextColor(Color.WHITE);
+        status.setTextSize(14);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(8, 8, 8, 8);
 
-        gpsText = new TextView(this);
-        gpsText.setText("Se așteaptă semnal GPS...");
-        gpsText.setTextSize(16);
-        gpsText.setTextColor(Color.WHITE);
-        gpsText.setGravity(Gravity.CENTER);
+        root.addView(status);
 
-        statusText = new TextView(this);
-        statusText.setText("GPS OPRIT");
-        statusText.setTextSize(18);
-        statusText.setTextColor(Color.YELLOW);
-        statusText.setGravity(Gravity.CENTER);
+        // HARTA
+        map = new MapView(this);
+        map.setTileSource(TileSourceFactory.MAPNIK);
+        map.setMultiTouchControls(true);
+        map.setUseDataConnection(true);
+        map.setBuiltInZoomControls(false);
+        map.setMinZoomLevel(3.0);
+        map.setMaxZoomLevel(19.0);
 
-        Button gpsButton = new Button(this);
-        gpsButton.setText("PORNEȘTE GPS");
-        gpsButton.setOnClickListener(v -> startGPS());
+        map.getController().setZoom(5.0);
+        map.getController().setCenter(defaultPosition);
 
+        LinearLayout.LayoutParams mapParams =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        0,
+                        1.0f
+                );
+
+        root.addView(map, mapParams);
+
+        // RANDUL CU BUTOANELE GPS SI ZOOM
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setGravity(Gravity.CENTER);
+
+        Button positionButton = new Button(this);
+        positionButton.setText("POZIȚIA MEA");
+        positionButton.setTextSize(12);
+        positionButton.setOnClickListener(v -> {
+            checkLocationPermission();
+            goToMyLocation();
+        });
+
+        Button zoomInButton = new Button(this);
+        zoomInButton.setText("+");
+        zoomInButton.setTextSize(20);
+        zoomInButton.setOnClickListener(v -> {
+            if (map != null) {
+                map.getController().zoomIn();
+            }
+        });
+
+        Button zoomOutButton = new Button(this);
+        zoomOutButton.setText("−");
+        zoomOutButton.setTextSize(20);
+        zoomOutButton.setOnClickListener(v -> {
+            if (map != null) {
+                map.getController().zoomOut();
+            }
+        });
+
+        buttons.addView(positionButton,
+                new LinearLayout.LayoutParams(0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT, 2));
+
+        buttons.addView(zoomInButton,
+                new LinearLayout.LayoutParams(0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        buttons.addView(zoomOutButton,
+                new LinearLayout.LayoutParams(0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        root.addView(buttons);
+
+        // BUTON VOCE
         Button voiceButton = new Button(this);
         voiceButton.setText("TESTEAZĂ VOCEA");
         voiceButton.setOnClickListener(v ->
-                speak("Bun venit în aplicația Truck Alex Community."));
+                speak("Bine ai venit în Truck Alex Community.")
+        );
 
-        layout.addView(title);
-        layout.addView(subtitle);
-        layout.addView(speedText);
-        layout.addView(gpsText);
-        layout.addView(statusText);
-        layout.addView(gpsButton);
-        layout.addView(voiceButton);
+        root.addView(voiceButton);
 
-        setContentView(layout);
+        setContentView(root);
+    }
+
+    private void initializeVoice() {
+
+        tts = new TextToSpeech(this, result -> {
+
+            if (result == TextToSpeech.SUCCESS) {
+
+                int languageResult =
+                        tts.setLanguage(new Locale("ro", "RO"));
+
+                voiceReady =
+                        languageResult != TextToSpeech.LANG_MISSING_DATA
+                        && languageResult != TextToSpeech.LANG_NOT_SUPPORTED;
+
+                if (voiceReady) {
+                    status.setText("Harta este pregătită. Vocea română este activă.");
+                } else {
+                    status.setText("Vocea română nu este disponibilă.");
+                }
+            }
+        });
+    }
+
+    private void speak(String message) {
+
+        if (tts != null && voiceReady) {
+            tts.speak(
+                    message,
+                    TextToSpeech.QUEUE_FLUSH,
+                    null,
+                    "truck_voice"
+            );
+        } else {
+            Toast.makeText(
+                    this,
+                    "Vocea nu este încă pregătită.",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    private void checkLocationPermission() {
+
+        if (Build.VERSION.SDK_INT >= 23 &&
+                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED) {
+
+            requestPermissions(
+                    new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    },
+                    LOCATION_PERMISSION
+            );
+
+        } else {
+            startGPS();
+        }
     }
 
     private void startGPS() {
 
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    100);
+        if (locationManager == null) {
+            status.setText("Serviciul GPS nu este disponibil.");
             return;
         }
 
         try {
+
+            if (!locationManager.isProviderEnabled(
+                    LocationManager.GPS_PROVIDER)) {
+
+                status.setText("Activează GPS-ul telefonului.");
+                return;
+            }
+
             locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    1000,
-                    1,
-                    locationListener);
+                    3000,
+                    5,
+                    this
+            );
 
-            statusText.setText("Se caută semnal GPS...");
+            status.setText("GPS activ. Se caută poziția...");
+
+            Location lastLocation =
+                    locationManager.getLastKnownLocation(
+                            LocationManager.GPS_PROVIDER
+                    );
+
+            if (lastLocation != null) {
+                onLocationChanged(lastLocation);
+            }
 
         } catch (SecurityException e) {
-            statusText.setText("Permisiune GPS indisponibilă");
+            status.setText("Permisiunea GPS nu este acordată.");
+        } catch (Exception e) {
+            status.setText("Nu se poate porni GPS-ul.");
         }
     }
 
-    private void updateGPS(Location location) {
+    private void goToMyLocation() {
 
-        float speed = location.hasSpeed()
-                ? location.getSpeed() * 3.6f : 0;
-
-        speedText.setText(
-                String.format(Locale.getDefault(), "%.0f km/h", speed));
-
-        gpsText.setText(
-                "Latitudine: " + location.getLatitude()
-                + "\nLongitudine: " + location.getLongitude());
-
-        statusText.setText("GPS ACTIV");
+        if (truckMarker != null && map != null) {
+            map.getController().animateTo(
+                    truckMarker.getPosition()
+            );
+            map.getController().setZoom(16.0);
+        } else {
+            status.setText("Așteaptă detectarea poziției GPS.");
+        }
     }
 
-    private void speak(String message) {
-        if (voiceReady && voice != null) {
-            voice.speak(message, TextToSpeech.QUEUE_FLUSH, null, "gps_voice");
+    @Override
+    public void onLocationChanged(Location location) {
+
+        double latitude = location.getLatitude();
+        double longitude = location.getLongitude();
+
+        GeoPoint position = new GeoPoint(latitude, longitude);
+
+        if (truckMarker == null) {
+
+            truckMarker = new Marker(map);
+            truckMarker.setTitle("Poziția GPS");
+            truckMarker.setAnchor(
+                    Marker.ANCHOR_CENTER,
+                    Marker.ANCHOR_BOTTOM
+            );
+
+            map.getOverlays().add(truckMarker);
         }
+
+        truckMarker.setPosition(position);
+
+        map.getController().setZoom(16.0);
+        map.getController().animateTo(position);
+        map.invalidate();
+
+        float speed = location.getSpeed() * 3.6f;
+
+        status.setText(
+                String.format(
+                        Locale.getDefault(),
+                        "GPS ACTIV | Viteză: %.1f km/h",
+                        speed
+                )
+        );
     }
 
     @Override
@@ -174,28 +320,76 @@ public class MainActivity extends Activity {
             int[] grantResults) {
 
         super.onRequestPermissionsResult(
-                requestCode, permissions, grantResults);
+                requestCode,
+                permissions,
+                grantResults
+        );
 
-        if (requestCode == 100
-                && grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startGPS();
-        } else {
-            statusText.setText("Permisiunea GPS nu a fost acordată");
+        if (requestCode == LOCATION_PERMISSION) {
+
+            if (grantResults.length > 0 &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                startGPS();
+
+            } else {
+
+                status.setText("Permisiunea GPS nu a fost acordată.");
+            }
         }
     }
 
     @Override
-    protected void onDestroy() {
+    public void onResume() {
+        super.onResume();
+
+        if (map != null) {
+            map.onResume();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        if (map != null) {
+            map.onPause();
+        }
+
         if (locationManager != null) {
-            locationManager.removeUpdates(locationListener);
+            locationManager.removeUpdates(this);
         }
+    }
 
-        if (voice != null) {
-            voice.stop();
-            voice.shutdown();
-        }
-
+    @Override
+    public void onDestroy() {
         super.onDestroy();
+
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+        }
+
+        if (map != null) {
+            map.onDetach();
+        }
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
+        if (status != null) {
+            status.setText("Activează GPS-ul telefonului.");
+        }
+    }
+
+    @Override
+    public void onStatusChanged(
+            String provider,
+            int statusValue,
+            Bundle extras) {
     }
 }
