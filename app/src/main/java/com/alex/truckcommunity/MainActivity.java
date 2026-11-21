@@ -65,6 +65,12 @@ public class MainActivity extends Activity {
     private boolean mapOpened = false;
     private boolean isCalculatingRoute = false;
 
+    // MOD 2D / 3D
+    private boolean is3D = false;
+    private double truckBearing = 0;
+
+    private TextView view3DButton;
+
     private double latitude = 0;
     private double longitude = 0;
 
@@ -232,15 +238,13 @@ public class MainActivity extends Activity {
 
         addButton("VOCE ROMANA", () -> {
 
-            if (voiceReady) {
-                if (voice != null) {
-                    voice.speak(
-                        "Bun venit la GPS Alex Truck Navi.",
-                        TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        "TEST_VOICE"
-                    );
-                }
+            if (voiceReady && voice != null) {
+                voice.speak(
+                    "Bun venit la GPS Alex Truck Navi.",
+                    TextToSpeech.QUEUE_FLUSH,
+                    null,
+                    "TEST_VOICE"
+                );
             } else {
                 showMessage("VOCE ROMANA",
                     "Vocea romana nu este disponibila. " +
@@ -355,6 +359,43 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    // CAMERA 2D / 3D
+
+    private void updateCamera() {
+
+        if (map == null) return;
+
+        double lat = latitude != 0 ? latitude : 45.4642;
+        double lon = longitude != 0 ? longitude : 9.1900;
+
+        CameraPosition.Builder camera =
+            new CameraPosition.Builder()
+                .target(new LatLng(lat, lon));
+
+        if (is3D) {
+
+            camera.zoom(17);
+            camera.tilt(60);
+            camera.bearing(truckBearing);
+
+        } else {
+
+            camera.zoom(14);
+            camera.tilt(0);
+            camera.bearing(0);
+        }
+
+        map.setCameraPosition(camera.build());
+    }
+
+    private void update3DButton() {
+
+        if (view3DButton == null) return;
+
+        view3DButton.setText(
+            is3D ? "ACTIVEAZA MOD 2D" : "ACTIVEAZA MOD 3D");
+    }
+
     // INITIALIZARE HARTA
 
     private void initializeMap() {
@@ -398,6 +439,10 @@ public class MainActivity extends Activity {
                     if (routePoints.size() > 1) {
                         drawRoute();
                     }
+
+                    if (is3D) {
+                        updateCamera();
+                    }
                 });
         });
     }
@@ -424,6 +469,10 @@ public class MainActivity extends Activity {
 
         if (navigationActive) {
             updateNavigation();
+
+            if (is3D) {
+                updateCamera();
+            }
         }
     }
 
@@ -790,11 +839,15 @@ public class MainActivity extends Activity {
                 .color(Color.BLUE)
                 .width(6));
 
-        map.setCameraPosition(
-            new CameraPosition.Builder()
-                .target(new LatLng(latitude, longitude))
-                .zoom(12)
-                .build());
+        if (is3D) {
+            updateCamera();
+        } else {
+            map.setCameraPosition(
+                new CameraPosition.Builder()
+                    .target(new LatLng(latitude, longitude))
+                    .zoom(12)
+                    .build());
+        }
     }
 
     // PORNIRE NAVIGARE
@@ -814,6 +867,10 @@ public class MainActivity extends Activity {
 
         for (RouteManeuver maneuver : routeManeuvers) {
             maneuver.announced = false;
+        }
+
+        if (is3D) {
+            updateCamera();
         }
 
         speak("Navigarea GPS Alex a inceput. " +
@@ -867,8 +924,6 @@ public class MainActivity extends Activity {
             }
         }
 
-        // DISTANTA RAMASA
-
         float remaining = 0;
 
         Location.distanceBetween(
@@ -896,7 +951,14 @@ public class MainActivity extends Activity {
 
             navigationActive = false;
 
-            speak("Ai ajuns la destinatie.");
+            if (voice != null && voiceReady) {
+                voice.speak(
+                    "Ai ajuns la destinatie.",
+                    TextToSpeech.QUEUE_FLUSH,
+                    null,
+                    "DESTINATION_REACHED"
+                );
+            }
 
             showMessage("AI AJUNS",
                 "Ai ajuns la destinatie.");
@@ -1297,6 +1359,26 @@ public class MainActivity extends Activity {
         screen.addView(navigateButton,
             new LinearLayout.LayoutParams(-1, dp(42)));
 
+        // BUTON MOD 3D
+
+        view3DButton = createActionButton(
+            is3D ? "ACTIVEAZA MOD 2D" : "ACTIVEAZA MOD 3D");
+
+        screen.addView(view3DButton,
+            new LinearLayout.LayoutParams(-1, dp(42)));
+
+        view3DButton.setOnClickListener(v -> {
+
+            is3D = !is3D;
+
+            update3DButton();
+            updateCamera();
+
+            Toast.makeText(this,
+                is3D ? "MOD 3D ACTIVAT" : "MOD 2D ACTIVAT",
+                Toast.LENGTH_SHORT).show();
+        });
+
         TextView mapHint = new TextView(this);
         mapHint.setText("Atinge harta pentru a selecta destinatia.");
         mapHint.setTextColor(Color.DKGRAY);
@@ -1575,8 +1657,14 @@ public class MainActivity extends Activity {
                 locationManager.getLastKnownLocation(provider);
 
             if (location != null) {
+
                 latitude = location.getLatitude();
                 longitude = location.getLongitude();
+
+                if (location.hasBearing()) {
+                    truckBearing = location.getBearing();
+                }
+
                 updateTruckPosition();
             }
 
@@ -1601,8 +1689,16 @@ public class MainActivity extends Activity {
 
             @Override
             public void onLocationChanged(Location loc) {
+
                 latitude = loc.getLatitude();
                 longitude = loc.getLongitude();
+
+                // DIRECTIA DE DEPLASARE A CAMIONULUI
+
+                if (loc.hasBearing() && loc.getSpeed() > 1.0f) {
+                    truckBearing = loc.getBearing();
+                }
+
                 updateTruckPosition();
             }
 
@@ -1632,6 +1728,7 @@ public class MainActivity extends Activity {
         truckMarker = null;
         destinationMarker = null;
         routeLine = null;
+        view3DButton = null;
     }
 
     private void returnHome() {
