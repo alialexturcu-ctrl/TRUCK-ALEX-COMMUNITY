@@ -19,11 +19,14 @@ import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.Button;
 
-import org.osmdroid.config.Configuration;
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
-import org.osmdroid.util.GeoPoint;
-import org.osmdroid.views.MapView;
-import org.osmdroid.views.overlay.Marker;
+import org.maplibre.android.MapLibre;
+import org.maplibre.android.annotations.Marker;
+import org.maplibre.android.annotations.MarkerOptions;
+import org.maplibre.android.camera.CameraPosition;
+import org.maplibre.android.geometry.LatLng;
+import org.maplibre.android.maps.MapView;
+import org.maplibre.android.maps.MapLibreMap;
+import org.maplibre.android.maps.Style;
 
 import java.util.List;
 import java.util.Locale;
@@ -35,9 +38,12 @@ public class MainActivity extends Activity {
 
     private LinearLayout home;
     private MapView mapView;
+    private MapLibreMap map;
     private LocationManager locationManager;
+
     private Marker truckMarker;
     private Marker destinationMarker;
+    private Location lastLocation;
 
     private final ExecutorService executor =
             Executors.newSingleThreadExecutor();
@@ -45,39 +51,25 @@ public class MainActivity extends Activity {
     private static final int GPS_PERMISSION = 100;
 
     private final LocationListener locationListener = location -> {
-        if (mapView != null) {
-            GeoPoint point = new GeoPoint(
-                    location.getLatitude(),
-                    location.getLongitude()
-            );
-
-            if (truckMarker == null) {
-                truckMarker = new Marker(mapView);
-                truckMarker.setTitle("Camionul meu");
-                truckMarker.setAnchor(
-                        Marker.ANCHOR_CENTER,
-                        Marker.ANCHOR_BOTTOM
-                );
-                mapView.getOverlays().add(truckMarker);
-            }
-
-            truckMarker.setPosition(point);
-            mapView.getController().animateTo(point);
-            mapView.invalidate();
-        }
+        lastLocation = location;
+        updateTruckPosition(location);
     };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Configuration.getInstance().setUserAgentValue(getPackageName());
+
+        MapLibre.getInstance(this);
+
         locationManager = (LocationManager)
                 getSystemService(LOCATION_SERVICE);
+
         showHome();
     }
 
     private void showHome() {
         ScrollView scroll = new ScrollView(this);
+
         home = new LinearLayout(this);
         home.setOrientation(LinearLayout.VERTICAL);
         home.setPadding(18, 18, 18, 18);
@@ -86,14 +78,19 @@ public class MainActivity extends Activity {
         scroll.addView(home);
 
         addPanel("HARTA GPS", "Deschide harta GPS.");
+
         addPanel("PROFIL TIR",
                 "Inaltime: 4.00 m\nLatime: 2.55 m\nLungime: 16.50 m\nGreutate: 40 tone");
+
         addPanel("CAMION RIGID",
                 "Inaltime: 3.50 m\nLatime: 2.55 m\nLungime: 8.00 m\nGreutate: 18 tone\n2 axe");
+
         addPanel("SETARI CAMION",
                 "Setarile camionului vor fi adaugate.");
+
         addPanel("VOCE ROMANA",
                 "Vocea romana va fi adaugata.");
+
         addPanel("DESPRE APLICATIE",
                 "TRUCK ALEX COMMUNITY\nVersiunea 1.0");
 
@@ -102,6 +99,7 @@ public class MainActivity extends Activity {
 
     private void addPanel(String title, String message) {
         TextView panel = new TextView(this);
+
         panel.setText(title);
         panel.setTextColor(Color.WHITE);
         panel.setTextSize(21);
@@ -110,6 +108,7 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(-1, 95);
+
         params.setMargins(0, 0, 0, 14);
         home.addView(panel, params);
 
@@ -127,8 +126,6 @@ public class MainActivity extends Activity {
     }
 
     private void showMap() {
-        Configuration.getInstance().setUserAgentValue(getPackageName());
-
         LinearLayout screen = new LinearLayout(this);
         screen.setOrientation(LinearLayout.VERTICAL);
 
@@ -138,7 +135,9 @@ public class MainActivity extends Activity {
         back.setTextColor(Color.WHITE);
         back.setGravity(Gravity.CENTER);
         back.setBackgroundColor(Color.rgb(25, 105, 190));
-        screen.addView(back, new LinearLayout.LayoutParams(-1, 55));
+
+        screen.addView(back,
+                new LinearLayout.LayoutParams(-1, 55));
 
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -147,7 +146,9 @@ public class MainActivity extends Activity {
         EditText searchInput = new EditText(this);
         searchInput.setSingleLine(true);
         searchInput.setTextSize(16);
-        searchInput.setHint("Oras sau coordonate: 45.4642, 9.1900");
+        searchInput.setHint(
+                "Oras sau coordonate: 45.4642, 9.1900"
+        );
         searchInput.setBackgroundColor(Color.WHITE);
         searchInput.setPadding(12, 4, 12, 4);
 
@@ -156,23 +157,51 @@ public class MainActivity extends Activity {
 
         Button searchButton = new Button(this);
         searchButton.setText("CAUTA");
+
         searchRow.addView(searchButton,
                 new LinearLayout.LayoutParams(-2, 55));
 
         screen.addView(searchRow);
 
         mapView = new MapView(this);
-        mapView.setTileSource(TileSourceFactory.MAPNIK);
-        mapView.setMultiTouchControls(true);
-        mapView.setBuiltInZoomControls(true);
-        mapView.getController().setZoom(5.5);
-        mapView.getController().setCenter(new GeoPoint(42.5, 12.5));
+        mapView.onCreate(null);
 
         screen.addView(mapView,
                 new LinearLayout.LayoutParams(-1, 0, 1));
 
+        setContentView(screen);
+
+        mapView.onStart();
+        mapView.onResume();
+
+        mapView.getMapAsync(mapLibreMap -> {
+            map = mapLibreMap;
+
+            map.setStyle(
+                    new Style.Builder().fromUri(
+                            "https://tiles.openfreemap.org/styles/liberty"
+                    ),
+                    style -> {
+                        map.getUiSettings()
+                                .setCompassEnabled(true);
+
+                        map.setCameraPosition(
+                                new CameraPosition.Builder()
+                                        .target(new LatLng(42.5, 12.5))
+                                        .zoom(5.5)
+                                        .build()
+                        );
+
+                        if (lastLocation != null) {
+                            updateTruckPosition(lastLocation);
+                        }
+                    }
+            );
+        });
+
         searchButton.setOnClickListener(v -> {
-            String query = searchInput.getText().toString().trim();
+            String query = searchInput.getText()
+                    .toString().trim();
 
             if (query.isEmpty()) {
                 searchInput.setError("Scrie o destinatie");
@@ -183,7 +212,7 @@ public class MainActivity extends Activity {
             searchButton.setText("CAUT...");
 
             executor.execute(() -> {
-                GeoPoint foundPoint = null;
+                LatLng foundPoint = null;
                 String error = null;
 
                 try {
@@ -191,17 +220,21 @@ public class MainActivity extends Activity {
 
                     if (parts.length == 2) {
                         try {
-                            double lat = Double.parseDouble(parts[0]);
-                            double lon = Double.parseDouble(parts[1]);
+                            double lat =
+                                    Double.parseDouble(parts[0]);
+
+                            double lon =
+                                    Double.parseDouble(parts[1]);
 
                             if (lat >= -90 && lat <= 90
                                     && lon >= -180 && lon <= 180) {
-                                foundPoint = new GeoPoint(lat, lon);
+                                foundPoint = new LatLng(lat, lon);
                             } else {
                                 error = "Coordonate in afara limitelor.";
                             }
+
                         } catch (NumberFormatException e) {
-                            // Nu sunt coordonate; cautam ca adresa.
+                            // Cautam ca adresa.
                         }
                     }
 
@@ -214,7 +247,8 @@ public class MainActivity extends Activity {
 
                         if (results != null && !results.isEmpty()) {
                             Address address = results.get(0);
-                            foundPoint = new GeoPoint(
+
+                            foundPoint = new LatLng(
                                     address.getLatitude(),
                                     address.getLongitude()
                             );
@@ -224,19 +258,21 @@ public class MainActivity extends Activity {
                     }
 
                 } catch (IOException e) {
-                    error = "Verifica conexiunea la internet.";
+                    error = "Verifica internetul.";
                 } catch (Exception e) {
                     error = "Nu am putut cauta destinatia.";
                 }
 
-                final GeoPoint resultPoint = foundPoint;
+                final LatLng resultPoint = foundPoint;
                 final String resultError = error;
 
                 runOnUiThread(() -> {
                     searchButton.setEnabled(true);
                     searchButton.setText("CAUTA");
 
-                    if (mapView == null) return;
+                    if (map == null || mapView == null) {
+                        return;
+                    }
 
                     if (resultPoint == null) {
                         showMessage(resultError == null
@@ -246,38 +282,38 @@ public class MainActivity extends Activity {
                     }
 
                     if (destinationMarker != null) {
-                        mapView.getOverlays().remove(destinationMarker);
+                        map.removeMarker(destinationMarker);
                     }
 
-                    destinationMarker = new Marker(mapView);
-                    destinationMarker.setPosition(resultPoint);
-                    destinationMarker.setTitle("Destinatia cautata");
-                    destinationMarker.setAnchor(
-                            Marker.ANCHOR_CENTER,
-                            Marker.ANCHOR_BOTTOM
+                    destinationMarker = map.addMarker(
+                            new MarkerOptions()
+                                    .position(resultPoint)
+                                    .title("Destinatia cautata")
                     );
 
-                    mapView.getOverlays().add(destinationMarker);
-                    mapView.getController().animateTo(resultPoint);
-                    mapView.getController().setZoom(14.0);
-                    mapView.invalidate();
+                    map.setCameraPosition(
+                            new CameraPosition.Builder()
+                                    .target(resultPoint)
+                                    .zoom(15.5)
+                                    .tilt(55)
+                                    .build()
+                    );
                 });
             });
         });
 
         back.setOnClickListener(v -> {
             stopGps();
-            mapView = null;
-            truckMarker = null;
-            destinationMarker = null;
+            destroyMap();
             showHome();
         });
 
-        setContentView(screen);
-
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (checkSelfPermission(
+                Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
+
             startGps();
+
         } else {
             requestPermissions(
                     new String[]{
@@ -287,6 +323,36 @@ public class MainActivity extends Activity {
                     GPS_PERMISSION
             );
         }
+    }
+
+    private void updateTruckPosition(Location location) {
+        if (map == null || mapView == null) {
+            return;
+        }
+
+        LatLng point = new LatLng(
+                location.getLatitude(),
+                location.getLongitude()
+        );
+
+        if (truckMarker == null) {
+            truckMarker = map.addMarker(
+                    new MarkerOptions()
+                            .position(point)
+                            .title("Camionul meu")
+            );
+        } else {
+            truckMarker.setPosition(point);
+            map.updateMarker(truckMarker);
+        }
+
+        map.setCameraPosition(
+                new CameraPosition.Builder()
+                        .target(point)
+                        .zoom(15.5)
+                        .tilt(55)
+                        .build()
+        );
     }
 
     private void showMessage(String message) {
@@ -305,13 +371,15 @@ public class MainActivity extends Activity {
                     locationListener
             );
 
-            Location last = locationManager.getLastKnownLocation(
-                    LocationManager.GPS_PROVIDER
-            );
+            Location last =
+                    locationManager.getLastKnownLocation(
+                            LocationManager.GPS_PROVIDER
+                    );
 
             if (last != null) {
                 locationListener.onLocationChanged(last);
             }
+
         } catch (SecurityException e) {
             showMessage("Permisiunea GPS nu este activata.");
         }
@@ -323,22 +391,45 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void destroyMap() {
+        if (mapView != null) {
+            mapView.onPause();
+            mapView.onStop();
+            mapView.onDestroy();
+        }
+
+        mapView = null;
+        map = null;
+        truckMarker = null;
+        destinationMarker = null;
+    }
+
     @Override
     public void onRequestPermissionsResult(
             int requestCode,
             String[] permissions,
             int[] grantResults) {
+
         super.onRequestPermissionsResult(
                 requestCode, permissions, grantResults);
 
         if (requestCode == GPS_PERMISSION) {
             if (grantResults.length > 0
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    && grantResults[0]
+                    == PackageManager.PERMISSION_GRANTED) {
                 startGps();
             } else {
-                showMessage("Fara permisiunea GPS, pozitia nu poate fi afisata.");
+                showMessage(
+                        "Fara permisiunea GPS, pozitia nu poate fi afisata."
+                );
             }
         }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mapView != null) mapView.onStart();
     }
 
     @Override
@@ -355,7 +446,25 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStop() {
+        if (mapView != null) mapView.onStop();
+        super.onStop();
+    }
+
+    @Override
+    protected void onLowMemory() {
+        super.onLowMemory();
+        if (mapView != null) mapView.onLowMemory();
+    }
+
+    @Override
     protected void onDestroy() {
+        stopGps();
+
+        if (mapView != null) {
+            mapView.onDestroy();
+        }
+
         executor.shutdownNow();
         super.onDestroy();
     }
