@@ -20,6 +20,7 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -52,33 +53,46 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity
         implements LocationListener, MapEventsReceiver {
 
+    // HARTA SI INTERFATA
+
     private MapView map;
-
-    private EditText startInput;
-    private EditText destinationInput;
-
-    private TextView statusText;
-    private TextView distanceText;
-    private TextView durationText;
-    private TextView nextText;
-    private TextView speedText;
-
-    private Button routeButton;
-    private Button voiceButton;
-    private Button guidanceButton;
+    private FrameLayout root;
 
     private LinearLayout topPanel;
     private LinearLayout bottomPanel;
     private LinearLayout sidePanel;
 
+    private EditText startInput;
+    private EditText destinationInput;
+
+    private TextView statusText;
+    private TextView speedText;
+    private TextView distanceText;
+    private TextView durationText;
+    private TextView nextText;
+
+    private Button routeButton;
+    private Button voiceButton;
+    private Button guidanceButton;
+
+    // GPS
+
     private LocationManager locationManager;
     private Location currentLocation;
+
+    private static final int LOCATION_PERMISSION = 1001;
+
+    // VOCE
 
     private TextToSpeech tts;
     private boolean ttsReady = false;
 
+    // INTERNET
+
     private final ExecutorService executor =
             Executors.newSingleThreadExecutor();
+
+    // MARKERE SI TRASEU
 
     private Marker gpsMarker;
     private Marker startMarker;
@@ -88,6 +102,8 @@ public class MainActivity extends Activity
     private GeoPoint destinationPoint;
     private GeoPoint lastDestinationPoint;
 
+    // MANEVRE
+
     private final List<String> instructions =
             new ArrayList<>();
 
@@ -96,21 +112,20 @@ public class MainActivity extends Activity
 
     private int currentManeuverIndex = 0;
 
-    private boolean guidanceActive = true;
-    private boolean changingDestination = false;
-    private boolean nightMode = true;
-    private boolean routeCalculated = false;
+    private static class ManeuverPoint {
+        GeoPoint point;
+        String instruction;
+        boolean announced = false;
+
+        ManeuverPoint(GeoPoint point, String instruction) {
+            this.point = point;
+            this.instruction = instruction;
+        }
+    }
+
+    // SETARI
 
     private SharedPreferences preferences;
-
-    private static final int LOCATION_PERMISSION = 1001;
-
-    private int BACKGROUND = Color.rgb(13, 20, 26);
-    private int PANEL = Color.rgb(25, 34, 42);
-    private int PANEL_LIGHT = Color.rgb(39, 50, 59);
-    private int GREEN = Color.rgb(0, 190, 105);
-    private int WHITE = Color.WHITE;
-    private int BUTTON_BLACK = Color.rgb(10, 14, 18);
 
     private static final String PREFS =
             "truck_alex_preferences";
@@ -139,23 +154,27 @@ public class MainActivity extends Activity
     private static final String AUTO_GUIDANCE =
             "auto_guidance";
 
-    // MODEL MANEVRA
+    private boolean nightMode = true;
+    private boolean guidanceActive = true;
+    private boolean changingDestination = false;
+    private boolean routeCalculated = false;
 
-    private static class ManeuverPoint {
+    // CULORI
 
-        GeoPoint point;
-        String instruction;
-        boolean announced = false;
-
-        ManeuverPoint(GeoPoint point, String instruction) {
-            this.point = point;
-            this.instruction = instruction;
-        }
-    }
+    private int BACKGROUND;
+    private int PANEL;
+    private int PANEL_LIGHT;
+    private int GREEN;
+    private int WHITE;
+    private int BUTTON_BLACK = Color.rgb(10, 14, 18);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        getWindow().setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        );
 
         preferences = getSharedPreferences(
                 PREFS,
@@ -184,27 +203,22 @@ public class MainActivity extends Activity
         checkLocationPermission();
     }
 
-    // CULORI
+    // CULORI SI TEMA
 
     private void updateColors() {
 
         if (nightMode) {
-
             BACKGROUND = Color.rgb(13, 20, 26);
             PANEL = Color.rgb(25, 34, 42);
             PANEL_LIGHT = Color.rgb(39, 50, 59);
             GREEN = Color.rgb(0, 190, 105);
             WHITE = Color.WHITE;
-            BUTTON_BLACK = Color.rgb(10, 14, 18);
-
         } else {
-
             BACKGROUND = Color.rgb(235, 240, 244);
-            PANEL = Color.rgb(255, 255, 255);
+            PANEL = Color.WHITE;
             PANEL_LIGHT = Color.rgb(225, 232, 237);
             GREEN = Color.rgb(0, 135, 75);
             WHITE = Color.rgb(25, 35, 45);
-            BUTTON_BLACK = Color.rgb(10, 14, 18);
         }
     }
 
@@ -219,70 +233,58 @@ public class MainActivity extends Activity
         updateColors();
 
         if (topPanel != null) {
-            topPanel.setBackground(rounded(PANEL, 20));
+            topPanel.setBackground(rounded(PANEL, 18));
+            updateThemeViews(topPanel);
         }
 
         if (bottomPanel != null) {
-            bottomPanel.setBackground(rounded(PANEL, 20));
+            bottomPanel.setBackground(rounded(PANEL, 18));
+            updateThemeViews(bottomPanel);
         }
 
         if (sidePanel != null) {
             sidePanel.setBackground(rounded(PANEL, 16));
+            updateThemeViews(sidePanel);
         }
 
         if (map != null) {
             map.invalidate();
         }
 
-        if (topPanel != null) {
-            updateTextColors(topPanel);
-        }
-
-        if (bottomPanel != null) {
-            updateTextColors(bottomPanel);
-        }
-
         Toast.makeText(
                 this,
-                nightMode ? "Mod noapte activat" : "Mod zi activat",
+                nightMode
+                        ? "Mod noapte activat"
+                        : "Mod zi activat",
                 Toast.LENGTH_SHORT
         ).show();
     }
 
-    private void updateTextColors(View view) {
+    private void updateThemeViews(View view) {
 
         if (view instanceof Button) {
             return;
         }
 
         if (view instanceof EditText) {
-
             EditText edit = (EditText) view;
-
             edit.setTextColor(WHITE);
-
             edit.setHintTextColor(
-                    nightMode
-                            ? Color.LTGRAY
-                            : Color.DKGRAY
+                    nightMode ? Color.LTGRAY : Color.DKGRAY
             );
-
+            edit.setBackground(rounded(PANEL_LIGHT, 10));
             return;
         }
 
         if (view instanceof TextView) {
-
-            TextView text = (TextView) view;
-
-            text.setTextColor(WHITE);
+            ((TextView) view).setTextColor(WHITE);
         }
 
         if (view instanceof ViewGroup) {
-
             ViewGroup group = (ViewGroup) view;
 
             for (int i = 0; i < group.getChildCount(); i++) {
-                updateTextColors(group.getChildAt(i));
+                updateThemeViews(group.getChildAt(i));
             }
         }
     }
@@ -307,12 +309,11 @@ public class MainActivity extends Activity
         );
     }
 
-    // INTERFATA
+    // INTERFATA PRINCIPALA
 
     private void createInterface() {
 
-        FrameLayout root = new FrameLayout(this);
-
+        root = new FrameLayout(this);
         root.setBackgroundColor(BACKGROUND);
 
         root.addView(
@@ -320,295 +321,9 @@ public class MainActivity extends Activity
                 new FrameLayout.LayoutParams(-1, -1)
         );
 
-        // PANOU SUPERIOR
-
-        topPanel = new LinearLayout(this);
-
-        topPanel.setOrientation(LinearLayout.VERTICAL);
-        topPanel.setPadding(14, 10, 14, 10);
-        topPanel.setBackground(rounded(PANEL, 20));
-
-        TextView title = new TextView(this);
-
-        title.setText("TRUCK ALEX COMMUNITY");
-        title.setTextColor(GREEN);
-        title.setTextSize(20);
-        title.setGravity(Gravity.CENTER);
-        title.setTypeface(null, Typeface.BOLD);
-
-        topPanel.addView(title);
-
-        TextView subtitle = new TextView(this);
-
-        subtitle.setText("YOUR COMMUNITY NAVIGATION");
-        subtitle.setTextColor(Color.LTGRAY);
-        subtitle.setTextSize(10);
-        subtitle.setGravity(Gravity.CENTER);
-
-        topPanel.addView(subtitle);
-
-        startInput = createInput(
-                "●  Plecare: GPS sau adresă"
-        );
-
-        destinationInput = createInput(
-                "●  Unde mergem? Introdu destinația"
-        );
-
-        topPanel.addView(startInput);
-        topPanel.addView(destinationInput);
-
-        LinearLayout searchButtons =
-                new LinearLayout(this);
-
-        searchButtons.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-        Button coordinateButton =
-                createButton("COORDONATE");
-
-        Button mapButton =
-                createButton("ALEGE PE HARTĂ");
-
-        LinearLayout.LayoutParams half =
-                new LinearLayout.LayoutParams(0, 54, 1);
-
-        half.setMargins(3, 3, 3, 3);
-
-        searchButtons.addView(coordinateButton, half);
-        searchButtons.addView(mapButton, half);
-
-        topPanel.addView(searchButtons);
-
-        coordinateButton.setOnClickListener(v ->
-                showCoordinateDialog()
-        );
-
-        mapButton.setOnClickListener(v ->
-                selectDestinationOnMap()
-        );
-
-        routeButton =
-                createButton("CALCULEAZĂ TRASEUL");
-
-        routeButton.setTextSize(15);
-
-        topPanel.addView(routeButton);
-
-        routeButton.setOnClickListener(v ->
-                calculateRoute()
-        );
-
-        FrameLayout.LayoutParams topParams =
-                new FrameLayout.LayoutParams(
-                        -1,
-                        -2,
-                        Gravity.TOP
-                );
-
-        topParams.setMargins(10, 10, 10, 0);
-
-        root.addView(topPanel, topParams);
-
-        // BUTOANE LATERALE
-
-        sidePanel = new LinearLayout(this);
-
-        sidePanel.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
-        sidePanel.setPadding(4, 4, 4, 4);
-        sidePanel.setBackground(rounded(PANEL, 16));
-
-        Button zoomIn = createSideButton("+");
-        Button zoomOut = createSideButton("−");
-        Button gpsButton = createSideButton("GPS");
-
-        Button favoriteButton =
-                createSideButton("FAVORITE");
-
-        Button recentButton =
-                createSideButton("RECENTE");
-
-        Button truckButton =
-                createSideButton("CAMION");
-
-        Button themeButton =
-                createSideButton("ZI/NOAPTE");
-
-        guidanceButton =
-                createSideButton(
-                        guidanceActive
-                                ? "GHIDARE ON"
-                                : "GHIDARE OFF"
-                );
-
-        sidePanel.addView(zoomIn);
-        sidePanel.addView(zoomOut);
-        sidePanel.addView(gpsButton);
-        sidePanel.addView(favoriteButton);
-        sidePanel.addView(recentButton);
-        sidePanel.addView(truckButton);
-        sidePanel.addView(themeButton);
-        sidePanel.addView(guidanceButton);
-
-        zoomIn.setOnClickListener(v ->
-                map.getController().zoomIn()
-        );
-
-        zoomOut.setOnClickListener(v ->
-                map.getController().zoomOut()
-        );
-
-        gpsButton.setOnClickListener(v ->
-                showMyPosition()
-        );
-
-        favoriteButton.setOnClickListener(v ->
-                showSavedPlaces(FAVORITES, "DESTINAȚII FAVORITE")
-        );
-
-        recentButton.setOnClickListener(v ->
-                showSavedPlaces(RECENTS, "DESTINAȚII RECENTE")
-        );
-
-        truckButton.setOnClickListener(v ->
-                showTruckProfile()
-        );
-
-        themeButton.setOnClickListener(v ->
-                toggleTheme()
-        );
-
-        guidanceButton.setOnClickListener(v ->
-                toggleGuidance()
-        );
-
-        FrameLayout.LayoutParams sideParams =
-                new FrameLayout.LayoutParams(
-                        96,
-                        -2,
-                        Gravity.RIGHT | Gravity.CENTER_VERTICAL
-                );
-
-        sideParams.setMargins(0, 0, 9, 0);
-
-        root.addView(sidePanel, sideParams);
-
-        // PANOU INFERIOR
-
-        bottomPanel = new LinearLayout(this);
-
-        bottomPanel.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
-        bottomPanel.setPadding(14, 10, 14, 10);
-        bottomPanel.setBackground(rounded(PANEL, 20));
-
-        statusText = createText(
-                "●  Aștept poziția GPS..."
-        );
-
-        statusText.setTextColor(GREEN);
-
-        bottomPanel.addView(statusText);
-
-        speedText = createText(
-                "VITEZĂ: -- km/h | LIMITĂ: date indisponibile"
-        );
-
-        speedText.setTypeface(null, Typeface.BOLD);
-
-        bottomPanel.addView(speedText);
-
-        LinearLayout infoRow =
-                new LinearLayout(this);
-
-        infoRow.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-        LinearLayout distanceBox =
-                createInfoBox("DISTANȚĂ");
-
-        LinearLayout durationBox =
-                createInfoBox("DURATĂ ESTIMATĂ");
-
-        distanceText =
-                (TextView) distanceBox.getChildAt(1);
-
-        durationText =
-                (TextView) durationBox.getChildAt(1);
-
-        LinearLayout.LayoutParams infoParams =
-                new LinearLayout.LayoutParams(0, -2, 1);
-
-        infoParams.setMargins(3, 5, 3, 5);
-
-        infoRow.addView(distanceBox, infoParams);
-        infoRow.addView(durationBox, infoParams);
-
-        bottomPanel.addView(infoRow);
-
-        nextText = createText(
-                "Următoarea manevră: --"
-        );
-
-        bottomPanel.addView(nextText);
-
-        LinearLayout bottomButtons =
-                new LinearLayout(this);
-
-        bottomButtons.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-        voiceButton =
-                createButton("ASCULTĂ");
-
-        Button maneuversButton =
-                createButton("MANEVRE");
-
-        LinearLayout.LayoutParams buttonParams =
-                new LinearLayout.LayoutParams(0, 54, 1);
-
-        buttonParams.setMargins(3, 3, 3, 3);
-
-        bottomButtons.addView(voiceButton, buttonParams);
-        bottomButtons.addView(maneuversButton, buttonParams);
-
-        bottomPanel.addView(bottomButtons);
-
-        voiceButton.setOnClickListener(v ->
-                speakInstructions()
-        );
-
-        maneuversButton.setOnClickListener(v ->
-                showManeuvers()
-        );
-
-        TextView copyright = createText(
-                "© OpenStreetMap | Rutare OSRM"
-        );
-
-        copyright.setTextSize(9);
-        copyright.setGravity(Gravity.CENTER);
-
-        bottomPanel.addView(copyright);
-
-        FrameLayout.LayoutParams bottomParams =
-                new FrameLayout.LayoutParams(
-                        -1,
-                        -2,
-                        Gravity.BOTTOM
-                );
-
-        bottomParams.setMargins(10, 0, 10, 10);
-
-        root.addView(bottomPanel, bottomParams);
+        createTopPanel();
+        createSidePanel();
+        createBottomPanel();
 
         setContentView(root);
 
@@ -631,7 +346,6 @@ public class MainActivity extends Activity
                             int before,
                             int count
                     ) {
-
                         if (!changingDestination) {
                             destinationPoint = null;
                         }
@@ -642,29 +356,282 @@ public class MainActivity extends Activity
                     }
                 }
         );
-
-        updateTextColors(topPanel);
-        updateTextColors(bottomPanel);
     }
+
+    // PANOU SUS
+
+    private void createTopPanel() {
+
+        topPanel = new LinearLayout(this);
+        topPanel.setOrientation(LinearLayout.VERTICAL);
+        topPanel.setPadding(12, 7, 12, 8);
+        topPanel.setBackground(rounded(PANEL, 18));
+
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        TextView title = createText(
+                "TRUCK ALEX COMMUNITY"
+        );
+
+        title.setTextColor(GREEN);
+        title.setTextSize(17);
+        title.setTypeface(null, Typeface.BOLD);
+
+        titleRow.addView(
+                title,
+                new LinearLayout.LayoutParams(0, -2, 1)
+        );
+
+        TextView version = createText("GPS 2.0");
+        version.setTextSize(10);
+        version.setTextColor(GREEN);
+
+        titleRow.addView(version);
+
+        topPanel.addView(titleRow);
+
+        startInput = createInput(
+                "PLECARE: poziția GPS sau adresă"
+        );
+
+        destinationInput = createInput(
+                "DESTINAȚIE: unde mergem?"
+        );
+
+        topPanel.addView(startInput);
+        topPanel.addView(destinationInput);
+
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button coordinateButton =
+                createButton("COORDONATE");
+
+        Button mapButton =
+                createButton("ALEGE PE HARTĂ");
+
+        LinearLayout.LayoutParams half =
+                new LinearLayout.LayoutParams(0, 43, 1);
+
+        half.setMargins(3, 2, 3, 2);
+
+        actionRow.addView(coordinateButton, half);
+        actionRow.addView(mapButton, half);
+
+        topPanel.addView(actionRow);
+
+        coordinateButton.setOnClickListener(
+                v -> showCoordinateDialog()
+        );
+
+        mapButton.setOnClickListener(
+                v -> selectDestinationOnMap()
+        );
+
+        routeButton = createButton("CALCULEAZĂ TRASEUL");
+        routeButton.setTextSize(14);
+
+        LinearLayout.LayoutParams routeParams =
+                new LinearLayout.LayoutParams(-1, 48);
+
+        routeParams.setMargins(3, 3, 3, 2);
+
+        topPanel.addView(routeButton, routeParams);
+
+        routeButton.setOnClickListener(
+                v -> calculateRoute()
+        );
+
+        FrameLayout.LayoutParams params =
+                new FrameLayout.LayoutParams(
+                        -1,
+                        -2,
+                        Gravity.TOP
+                );
+
+        params.setMargins(8, 8, 8, 0);
+
+        root.addView(topPanel, params);
+    }
+
+    // BUTOANE LATERALE
+
+    private void createSidePanel() {
+
+        sidePanel = new LinearLayout(this);
+        sidePanel.setOrientation(LinearLayout.VERTICAL);
+        sidePanel.setPadding(4, 4, 4, 4);
+        sidePanel.setBackground(rounded(PANEL, 16));
+
+        Button gpsButton = createSideButton("GPS");
+        Button zoomIn = createSideButton("+");
+        Button zoomOut = createSideButton("−");
+        Button moreButton = createSideButton("MENIU");
+
+        sidePanel.addView(gpsButton);
+        sidePanel.addView(zoomIn);
+        sidePanel.addView(zoomOut);
+        sidePanel.addView(moreButton);
+
+        gpsButton.setOnClickListener(
+                v -> showMyPosition()
+        );
+
+        zoomIn.setOnClickListener(
+                v -> map.getController().zoomIn()
+        );
+
+        zoomOut.setOnClickListener(
+                v -> map.getController().zoomOut()
+        );
+
+        moreButton.setOnClickListener(
+                v -> showMainMenu()
+        );
+
+        FrameLayout.LayoutParams params =
+                new FrameLayout.LayoutParams(
+                        76,
+                        -2,
+                        Gravity.RIGHT | Gravity.CENTER_VERTICAL
+                );
+
+        params.setMargins(0, 0, 7, 0);
+
+        root.addView(sidePanel, params);
+    }
+
+    // PANOU JOS
+
+    private void createBottomPanel() {
+
+        bottomPanel = new LinearLayout(this);
+        bottomPanel.setOrientation(LinearLayout.VERTICAL);
+        bottomPanel.setPadding(12, 8, 12, 8);
+        bottomPanel.setBackground(rounded(PANEL, 18));
+
+        statusText = createText("● Aștept poziția GPS...");
+        statusText.setTextColor(GREEN);
+        statusText.setTextSize(12);
+
+        bottomPanel.addView(statusText);
+
+        speedText = createText(
+                "VITEZĂ GPS: -- km/h"
+        );
+
+        speedText.setTextSize(16);
+        speedText.setTypeface(null, Typeface.BOLD);
+
+        bottomPanel.addView(speedText);
+
+        LinearLayout infoRow = new LinearLayout(this);
+        infoRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        LinearLayout distanceBox =
+                createInfoBox("DISTANȚĂ");
+
+        LinearLayout durationBox =
+                createInfoBox("DURATĂ ESTIMATĂ");
+
+        distanceText =
+                (TextView) distanceBox.getChildAt(1);
+
+        durationText =
+                (TextView) durationBox.getChildAt(1);
+
+        LinearLayout.LayoutParams infoParams =
+                new LinearLayout.LayoutParams(0, -2, 1);
+
+        infoParams.setMargins(3, 3, 3, 3);
+
+        infoRow.addView(distanceBox, infoParams);
+        infoRow.addView(durationBox, infoParams);
+
+        bottomPanel.addView(infoRow);
+
+        nextText = createText(
+                "URMĂTOAREA MANEVRĂ: --"
+        );
+
+        nextText.setTextSize(13);
+        nextText.setTypeface(null, Typeface.BOLD);
+
+        bottomPanel.addView(nextText);
+
+        LinearLayout buttonRow = new LinearLayout(this);
+        buttonRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        voiceButton = createButton("ASCULTĂ");
+        guidanceButton = createButton(
+                guidanceActive ? "VOCE AUTOMATĂ ON" : "VOCE AUTOMATĂ OFF"
+        );
+
+        Button maneuversButton = createButton("MANEVRE");
+
+        LinearLayout.LayoutParams buttonParams =
+                new LinearLayout.LayoutParams(0, 46, 1);
+
+        buttonParams.setMargins(2, 3, 2, 3);
+
+        buttonRow.addView(voiceButton, buttonParams);
+        buttonRow.addView(guidanceButton, buttonParams);
+        buttonRow.addView(maneuversButton, buttonParams);
+
+        bottomPanel.addView(buttonRow);
+
+        voiceButton.setOnClickListener(
+                v -> speakInstructions()
+        );
+
+        guidanceButton.setOnClickListener(
+                v -> toggleGuidance()
+        );
+
+        maneuversButton.setOnClickListener(
+                v -> showManeuvers()
+        );
+
+        TextView copyright = createText(
+                "OpenStreetMap • Rutare OSRM"
+        );
+
+        copyright.setTextSize(9);
+        copyright.setGravity(Gravity.CENTER);
+
+        bottomPanel.addView(copyright);
+
+        FrameLayout.LayoutParams params =
+                new FrameLayout.LayoutParams(
+                        -1,
+                        -2,
+                        Gravity.BOTTOM
+                );
+
+        params.setMargins(8, 0, 8, 8);
+
+        root.addView(bottomPanel, params);
+    }
+
+    // ELEMENTE GRAFICE
 
     private LinearLayout createInfoBox(String label) {
 
         LinearLayout box = new LinearLayout(this);
-
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(8, 8, 8, 8);
-        box.setBackground(rounded(PANEL_LIGHT, 12));
+        box.setPadding(8, 5, 8, 5);
+        box.setBackground(rounded(PANEL_LIGHT, 10));
 
         TextView heading = createText(label);
-
         heading.setTextSize(10);
         heading.setTextColor(Color.LTGRAY);
 
         TextView value = createText("--");
-
         value.setTextSize(18);
-        value.setTypeface(null, Typeface.BOLD);
         value.setTextColor(GREEN);
+        value.setTypeface(null, Typeface.BOLD);
 
         box.addView(heading);
         box.addView(value);
@@ -681,14 +648,13 @@ public class MainActivity extends Activity
         input.setTextColor(WHITE);
         input.setSingleLine(true);
         input.setTextSize(13);
-        input.setPadding(12, 2, 12, 2);
-
-        input.setBackground(rounded(PANEL_LIGHT, 12));
+        input.setPadding(12, 0, 12, 0);
+        input.setBackground(rounded(PANEL_LIGHT, 10));
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(-1, 45);
+                new LinearLayout.LayoutParams(-1, 43);
 
-        params.setMargins(0, 4, 0, 4);
+        params.setMargins(0, 3, 0, 3);
 
         input.setLayoutParams(params);
 
@@ -702,7 +668,7 @@ public class MainActivity extends Activity
         text.setText(value);
         text.setTextColor(WHITE);
         text.setTextSize(13);
-        text.setPadding(4, 4, 4, 4);
+        text.setPadding(4, 3, 4, 3);
 
         return text;
     }
@@ -713,17 +679,14 @@ public class MainActivity extends Activity
 
         button.setText(value);
         button.setTextColor(Color.WHITE);
-        button.setTextSize(14);
+        button.setTextSize(11);
         button.setAllCaps(false);
         button.setTypeface(null, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
-        button.setPadding(10, 8, 10, 8);
-        button.setMinHeight(54);
-        button.setMinimumHeight(54);
-
-        button.setBackground(
-                rounded(BUTTON_BLACK, 12)
-        );
+        button.setPadding(4, 3, 4, 3);
+        button.setMinHeight(42);
+        button.setMinimumHeight(42);
+        button.setBackground(rounded(BUTTON_BLACK, 10));
 
         return button;
     }
@@ -731,23 +694,19 @@ public class MainActivity extends Activity
     private Button createSideButton(String value) {
 
         Button button = createButton(value);
-
-        button.setTextSize(11);
+        button.setTextSize(10);
 
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(-1, 48);
 
-        params.setMargins(3, 3, 3, 3);
+        params.setMargins(2, 3, 2, 3);
 
         button.setLayoutParams(params);
 
         return button;
     }
 
-    private GradientDrawable rounded(
-            int color,
-            int radius
-    ) {
+    private GradientDrawable rounded(int color, int radius) {
 
         GradientDrawable drawable =
                 new GradientDrawable();
@@ -756,6 +715,60 @@ public class MainActivity extends Activity
         drawable.setCornerRadius(radius);
 
         return drawable;
+    }
+
+    // MENIU PRINCIPAL
+
+    private void showMainMenu() {
+
+        String[] options = {
+                "SALVEAZĂ DESTINAȚIA LA FAVORITE",
+                "DESTINAȚII FAVORITE",
+                "DESTINAȚII RECENTE",
+                "PROFIL CAMION",
+                "MOD ZI / NOAPTE",
+                "GHIDARE VOCALĂ"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle("TRUCK ALEX COMMUNITY")
+                .setItems(options, (dialog, which) -> {
+
+                    switch (which) {
+
+                        case 0:
+                            addFavorite();
+                            break;
+
+                        case 1:
+                            showSavedPlaces(
+                                    FAVORITES,
+                                    "DESTINAȚII FAVORITE"
+                            );
+                            break;
+
+                        case 2:
+                            showSavedPlaces(
+                                    RECENTS,
+                                    "DESTINAȚII RECENTE"
+                            );
+                            break;
+
+                        case 3:
+                            showTruckProfile();
+                            break;
+
+                        case 4:
+                            toggleTheme();
+                            break;
+
+                        case 5:
+                            toggleGuidance();
+                            break;
+                    }
+                })
+                .setNegativeButton("ÎNCHIDE", null)
+                .show();
     }
 
     // VOCE
@@ -768,10 +781,9 @@ public class MainActivity extends Activity
 
                     if (result == TextToSpeech.SUCCESS) {
 
-                        int language =
-                                tts.setLanguage(
-                                        new Locale("ro", "RO")
-                                );
+                        int language = tts.setLanguage(
+                                new Locale("ro", "RO")
+                        );
 
                         ttsReady =
                                 language != TextToSpeech.LANG_MISSING_DATA &&
@@ -791,8 +803,8 @@ public class MainActivity extends Activity
 
         guidanceButton.setText(
                 guidanceActive
-                        ? "GHIDARE ON"
-                        : "GHIDARE OFF"
+                        ? "VOCE AUTOMATĂ ON"
+                        : "VOCE AUTOMATĂ OFF"
         );
 
         if (!guidanceActive && tts != null) {
@@ -802,8 +814,8 @@ public class MainActivity extends Activity
         Toast.makeText(
                 this,
                 guidanceActive
-                        ? "Ghidare automată activată"
-                        : "Ghidare automată oprită",
+                        ? "Ghidare vocală activată"
+                        : "Ghidare vocală oprită",
                 Toast.LENGTH_SHORT
         ).show();
     }
@@ -811,7 +823,6 @@ public class MainActivity extends Activity
     private void speak(String message) {
 
         if (ttsReady && tts != null) {
-
             tts.speak(
                     message,
                     TextToSpeech.QUEUE_FLUSH,
@@ -824,24 +835,20 @@ public class MainActivity extends Activity
     private void speakInstructions() {
 
         if (!ttsReady) {
-
             Toast.makeText(
                     this,
                     "Vocea română nu este pregătită.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
         if (instructions.isEmpty()) {
-
             Toast.makeText(
                     this,
                     "Calculează mai întâi un traseu.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
@@ -865,7 +872,8 @@ public class MainActivity extends Activity
 
     private void updateAutomaticGuidance(Location location) {
 
-        if (!guidanceActive || !routeCalculated ||
+        if (!guidanceActive ||
+                !routeCalculated ||
                 maneuverPoints.isEmpty()) {
             return;
         }
@@ -876,7 +884,6 @@ public class MainActivity extends Activity
                     maneuverPoints.get(currentManeuverIndex);
 
             if (maneuver.point == null) {
-
                 currentManeuverIndex++;
                 continue;
             }
@@ -894,8 +901,8 @@ public class MainActivity extends Activity
             int meters = (int) distance[0];
 
             nextText.setText(
-                    "Următoarea manevră în aproximativ " +
-                    meters + " m: " +
+                    "URMĂTOAREA MANEVRĂ: " +
+                    meters + " m • " +
                     maneuver.instruction
             );
 
@@ -908,15 +915,13 @@ public class MainActivity extends Activity
                 currentManeuverIndex++;
 
             } else {
-
                 break;
             }
         }
 
         if (currentManeuverIndex >= maneuverPoints.size()) {
-
             nextText.setText(
-                    "Nu mai există manevre. Verifică sosirea."
+                    "Manevre terminate. Verifică sosirea."
             );
         }
     }
@@ -924,20 +929,17 @@ public class MainActivity extends Activity
     private void showManeuvers() {
 
         if (instructions.isEmpty()) {
-
             Toast.makeText(
                     this,
                     "Nu există încă un traseu.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
         StringBuilder message = new StringBuilder();
 
         for (int i = 0; i < instructions.size(); i++) {
-
             message.append(i + 1)
                     .append(". ")
                     .append(instructions.get(i))
@@ -947,7 +949,6 @@ public class MainActivity extends Activity
         ScrollView scroll = new ScrollView(this);
 
         TextView text = createText(message.toString());
-
         text.setTextSize(14);
         text.setPadding(18, 15, 18, 15);
 
@@ -960,13 +961,16 @@ public class MainActivity extends Activity
                 .show();
     }
 
-    // GPS
+    // GPS SI PERMISIUNI
 
     private void checkLocationPermission() {
 
         if (checkSelfPermission(
                 Manifest.permission.ACCESS_FINE_LOCATION
-        ) != PackageManager.PERMISSION_GRANTED) {
+        ) != PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED) {
 
             requestPermissions(
                     new String[]{
@@ -977,7 +981,6 @@ public class MainActivity extends Activity
             );
 
         } else {
-
             startGps();
         }
     }
@@ -1000,7 +1003,6 @@ public class MainActivity extends Activity
             boolean granted = false;
 
             for (int result : results) {
-
                 if (result == PackageManager.PERMISSION_GRANTED) {
                     granted = true;
                     break;
@@ -1008,11 +1010,8 @@ public class MainActivity extends Activity
             }
 
             if (granted) {
-
                 startGps();
-
             } else {
-
                 statusText.setText(
                         "Permisiunea GPS nu a fost acordată."
                 );
@@ -1048,14 +1047,12 @@ public class MainActivity extends Activity
             Location last = null;
 
             if (fine) {
-
                 last = locationManager.getLastKnownLocation(
                         LocationManager.GPS_PROVIDER
                 );
             }
 
-            if (last == null) {
-
+            if (last == null && coarse) {
                 last = locationManager.getLastKnownLocation(
                         LocationManager.NETWORK_PROVIDER
                 );
@@ -1066,7 +1063,6 @@ public class MainActivity extends Activity
             }
 
             if (fine) {
-
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
                         3000,
@@ -1075,14 +1071,22 @@ public class MainActivity extends Activity
                 );
             }
 
-            locationManager.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER,
-                    5000,
-                    10,
-                    this
-            );
+            if (coarse) {
+                locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER,
+                        5000,
+                        10,
+                        this
+                );
+            }
 
             statusText.setText("● GPS ACTIV");
+
+        } catch (SecurityException e) {
+
+            statusText.setText(
+                    "Permisiunea GPS trebuie verificată."
+            );
 
         } catch (Exception e) {
 
@@ -1107,10 +1111,8 @@ public class MainActivity extends Activity
         );
 
         if (gpsMarker == null) {
-
             gpsMarker = new Marker(map);
             gpsMarker.setTitle("Poziția mea");
-
             map.getOverlays().add(gpsMarker);
         }
 
@@ -1125,24 +1127,18 @@ public class MainActivity extends Activity
                 )
         );
 
-        if (location.hasSpeed()) {
+        double speed = location.getSpeed() * 3.6;
 
-            double speed =
-                    location.getSpeed() * 3.6;
-
+        if (speed >= 0) {
             speedText.setText(
                     String.format(
                             Locale.getDefault(),
-                            "VITEZĂ: %.0f km/h | LIMITĂ: date indisponibile",
+                            "VITEZĂ GPS: %.0f km/h",
                             speed
                     )
             );
-
         } else {
-
-            speedText.setText(
-                    "VITEZĂ: -- km/h | LIMITĂ: date indisponibile"
-            );
+            speedText.setText("VITEZĂ GPS: -- km/h");
         }
 
         updateAutomaticGuidance(location);
@@ -1153,13 +1149,11 @@ public class MainActivity extends Activity
     private void showMyPosition() {
 
         if (currentLocation == null) {
-
             Toast.makeText(
                     this,
                     "Așteaptă poziția GPS.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
@@ -1172,7 +1166,7 @@ public class MainActivity extends Activity
         map.getController().setZoom(15.0);
     }
 
-    // SELECTARE DESTINATIE
+    // DESTINATIE PE HARTA
 
     private void selectDestinationOnMap() {
 
@@ -1222,19 +1216,18 @@ public class MainActivity extends Activity
         }
 
         destinationMarker = new Marker(map);
-
         destinationMarker.setPosition(point);
         destinationMarker.setTitle("Destinație");
 
         map.getOverlays().add(destinationMarker);
-
         map.invalidate();
     }
+
+    // COORDONATE
 
     private void showCoordinateDialog() {
 
         LinearLayout layout = new LinearLayout(this);
-
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 10, 20, 10);
 
@@ -1287,7 +1280,8 @@ public class MainActivity extends Activity
                                 String.format(
                                         Locale.US,
                                         "%.6f, %.6f",
-                                        lat, lon
+                                        lat,
+                                        lon
                                 )
                         );
 
@@ -1319,7 +1313,6 @@ public class MainActivity extends Activity
     private void showTruckProfile() {
 
         LinearLayout layout = new LinearLayout(this);
-
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(18, 10, 18, 10);
 
@@ -1328,17 +1321,14 @@ public class MainActivity extends Activity
         EditText length = createInput("Lungime camion (m)");
         EditText weight = createInput("Greutate totală (tone)");
 
-        height.setInputType(InputType.TYPE_CLASS_NUMBER |
-                InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        int decimalInput =
+                InputType.TYPE_CLASS_NUMBER |
+                InputType.TYPE_NUMBER_FLAG_DECIMAL;
 
-        width.setInputType(InputType.TYPE_CLASS_NUMBER |
-                InputType.TYPE_NUMBER_FLAG_DECIMAL);
-
-        length.setInputType(InputType.TYPE_CLASS_NUMBER |
-                InputType.TYPE_NUMBER_FLAG_DECIMAL);
-
-        weight.setInputType(InputType.TYPE_CLASS_NUMBER |
-                InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        height.setInputType(decimalInput);
+        width.setInputType(decimalInput);
+        length.setInputType(decimalInput);
+        weight.setInputType(decimalInput);
 
         height.setText(preferences.getString(TRUCK_HEIGHT, ""));
         width.setText(preferences.getString(TRUCK_WIDTH, ""));
@@ -1351,13 +1341,12 @@ public class MainActivity extends Activity
         layout.addView(weight);
 
         TextView warning = createText(
-                "ATENȚIE: profilul este salvat în aplicație. " +
-                "Motorul OSRM actual nu folosește aceste dimensiuni " +
-                "pentru evitarea restricțiilor."
+                "Dimensiunile sunt salvate în profil. " +
+                "Motorul actual de rutare nu folosește aceste date " +
+                "pentru calcularea restricțiilor."
         );
 
         warning.setTextColor(Color.rgb(220, 90, 50));
-
         layout.addView(warning);
 
         new AlertDialog.Builder(this)
@@ -1367,14 +1356,22 @@ public class MainActivity extends Activity
                 .setPositiveButton("SALVEAZĂ", (dialog, which) -> {
 
                     preferences.edit()
-                            .putString(TRUCK_HEIGHT,
-                                    height.getText().toString().trim())
-                            .putString(TRUCK_WIDTH,
-                                    width.getText().toString().trim())
-                            .putString(TRUCK_LENGTH,
-                                    length.getText().toString().trim())
-                            .putString(TRUCK_WEIGHT,
-                                    weight.getText().toString().trim())
+                            .putString(
+                                    TRUCK_HEIGHT,
+                                    height.getText().toString().trim()
+                            )
+                            .putString(
+                                    TRUCK_WIDTH,
+                                    width.getText().toString().trim()
+                            )
+                            .putString(
+                                    TRUCK_LENGTH,
+                                    length.getText().toString().trim()
+                            )
+                            .putString(
+                                    TRUCK_WEIGHT,
+                                    weight.getText().toString().trim()
+                            )
                             .apply();
 
                     Toast.makeText(
@@ -1414,7 +1411,9 @@ public class MainActivity extends Activity
 
             updated.put(item);
 
-            for (int i = 0; i < old.length() && updated.length() < 10; i++) {
+            for (int i = 0;
+                 i < old.length() && updated.length() < 10;
+                 i++) {
 
                 JSONObject existing = old.getJSONObject(i);
 
@@ -1440,14 +1439,16 @@ public class MainActivity extends Activity
 
     private void addFavorite() {
 
-        if (lastDestinationPoint == null) {
+        GeoPoint point = destinationPoint != null
+                ? destinationPoint
+                : lastDestinationPoint;
 
+        if (point == null) {
             Toast.makeText(
                     this,
-                    "Calculează mai întâi un traseu.",
+                    "Selectează mai întâi o destinație.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
@@ -1458,7 +1459,7 @@ public class MainActivity extends Activity
             name = "Destinație salvată";
         }
 
-        savePlace(FAVORITES, name, lastDestinationPoint);
+        savePlace(FAVORITES, name, point);
 
         Toast.makeText(
                 this,
@@ -1479,23 +1480,19 @@ public class MainActivity extends Activity
             );
 
             if (saved.length() == 0) {
-
                 Toast.makeText(
                         this,
                         "Nu există destinații salvate.",
                         Toast.LENGTH_SHORT
                 ).show();
-
                 return;
             }
 
             String[] names = new String[saved.length()];
 
             for (int i = 0; i < saved.length(); i++) {
-
-                names[i] =
-                        saved.getJSONObject(i)
-                                .optString("name", "Destinație");
+                names[i] = saved.getJSONObject(i)
+                        .optString("name", "Destinație");
             }
 
             new AlertDialog.Builder(this)
@@ -1522,9 +1519,7 @@ public class MainActivity extends Activity
                             destinationPoint = point;
 
                             changingDestination = true;
-
                             destinationInput.setText(name);
-
                             changingDestination = false;
 
                             setDestinationMarker(point);
@@ -1532,11 +1527,9 @@ public class MainActivity extends Activity
                             map.getController().animateTo(point);
                             map.getController().setZoom(13.0);
 
-                            Toast.makeText(
-                                    this,
-                                    "Destinație selectată.",
-                                    Toast.LENGTH_SHORT
-                            ).show();
+                            statusText.setText(
+                                    "Destinație selectată."
+                            );
 
                         } catch (Exception ignored) {
                         }
@@ -1562,13 +1555,11 @@ public class MainActivity extends Activity
                 destinationInput.getText().toString().trim();
 
         if (destinationPoint == null && destination.isEmpty()) {
-
             Toast.makeText(
                     this,
                     "Introdu destinația.",
                     Toast.LENGTH_SHORT
             ).show();
-
             return;
         }
 
@@ -1578,20 +1569,17 @@ public class MainActivity extends Activity
                 startInput.getText().toString().trim();
 
         if (locationSnapshot == null && startAddress.isEmpty()) {
-
             Toast.makeText(
                     this,
                     "Așteaptă GPS-ul sau introdu plecarea.",
                     Toast.LENGTH_LONG
             ).show();
-
             return;
         }
 
         GeoPoint selectedDestination = destinationPoint;
 
         routeButton.setEnabled(false);
-
         statusText.setText("Se calculează traseul...");
 
         executor.execute(() -> {
@@ -1601,25 +1589,19 @@ public class MainActivity extends Activity
                 GeoPoint start;
 
                 if (startAddress.isEmpty()) {
-
                     start = new GeoPoint(
                             locationSnapshot.getLatitude(),
                             locationSnapshot.getLongitude()
                     );
-
                 } else {
-
                     start = findPlace(startAddress);
                 }
 
                 GeoPoint end;
 
                 if (selectedDestination != null) {
-
                     end = selectedDestination;
-
                 } else {
-
                     end = parseCoordinates(destination);
 
                     if (end == null) {
@@ -1764,8 +1746,7 @@ public class MainActivity extends Activity
         ArrayList<ManeuverPoint> newManeuvers =
                 new ArrayList<>();
 
-        JSONArray legs =
-                route.getJSONArray("legs");
+        JSONArray legs = route.getJSONArray("legs");
 
         for (int i = 0; i < legs.length(); i++) {
 
@@ -1833,7 +1814,6 @@ public class MainActivity extends Activity
             maneuverPoints.addAll(newManeuvers);
 
             currentManeuverIndex = 0;
-
             routeCalculated = true;
 
             if (routeLine != null) {
@@ -1841,7 +1821,6 @@ public class MainActivity extends Activity
             }
 
             routeLine = new Polyline();
-
             routeLine.setPoints(points);
             routeLine.setColor(GREEN);
             routeLine.setWidth(10f);
@@ -1916,21 +1895,18 @@ public class MainActivity extends Activity
             );
 
             if (!instructions.isEmpty()) {
-
                 nextText.setText(
-                        "Prima manevră: " +
+                        "PRIMA MANEVRĂ: " +
                         instructions.get(0)
                 );
-
             } else {
-
                 nextText.setText(
                         "Nu există manevre disponibile."
                 );
             }
 
             statusText.setText(
-                    "● TRASEU CALCULAT – RUTARE AUTO"
+                    "● TRASEU CALCULAT"
             );
 
             routeButton.setEnabled(true);
@@ -1939,11 +1915,13 @@ public class MainActivity extends Activity
 
             Toast.makeText(
                     this,
-                    "Traseu calculat. Verifică restricțiile pentru camion: OSRM nu aplică profilul camionului.",
-                    Toast.LENGTH_LONG
+                    "Traseu calculat.",
+                    Toast.LENGTH_SHORT
             ).show();
         });
     }
+
+    // TRADUCERE MANEVRE
 
     private String translateManeuver(
             String type,
@@ -2020,7 +1998,7 @@ public class MainActivity extends Activity
         return "Continuă pe traseu";
     }
 
-    // INTERNET
+    // CONEXIUNE INTERNET
 
     private String httpGet(String address)
             throws Exception {
@@ -2111,7 +2089,6 @@ public class MainActivity extends Activity
         }
 
         if (locationManager != null) {
-
             try {
                 locationManager.removeUpdates(this);
             } catch (Exception ignored) {
