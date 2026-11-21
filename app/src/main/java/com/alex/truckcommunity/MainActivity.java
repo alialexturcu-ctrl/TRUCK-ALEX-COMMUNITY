@@ -15,6 +15,7 @@ import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -30,6 +31,8 @@ import org.maplibre.android.camera.CameraPosition;
 import org.maplibre.android.geometry.LatLng;
 import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.MapView;
+import org.maplibre.android.annotations.Marker;
+import org.maplibre.android.annotations.MarkerOptions;
 
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -45,8 +48,11 @@ public class MainActivity extends Activity {
 
     private LinearLayout layout;
     private TextView status;
+
     private MapView mapView;
     private MapLibreMap map;
+    private Marker truckMarker;
+
     private LocationManager locationManager;
 
     private EditText addressInput;
@@ -63,6 +69,7 @@ public class MainActivity extends Activity {
     private final int BLUE = Color.rgb(30, 75, 115);
 
     private boolean mapOpened = false;
+    private boolean activityPaused = false;
 
     private static final String[] OVERPASS_SERVERS = {
             "https://overpass.kumi.systems/api/interpreter",
@@ -97,7 +104,11 @@ public class MainActivity extends Activity {
         getGPS();
     }
 
+    // MENIUL PRINCIPAL
+
     private void showHome() {
+
+        mapOpened = false;
 
         ScrollView scroll = new ScrollView(this);
 
@@ -125,7 +136,7 @@ public class MainActivity extends Activity {
 
         layout.addView(subtitle);
 
-        addButton("HARTA GPS", this::showMap);
+        addButton("HARTA GPS", () -> showMap());
 
         addButton("CAMION", () ->
                 showMessage("CAMION",
@@ -169,22 +180,47 @@ public class MainActivity extends Activity {
         status.setTextColor(Color.DKGRAY);
         status.setTextSize(15);
         status.setGravity(Gravity.CENTER);
-        status.setPadding(5, 15, 5, 15);
+        status.setPadding(5, 12, 5, 12);
 
         layout.addView(status);
 
+        // HARTA DIN MENIUL PRINCIPAL
+
+        TextView mapTitle = new TextView(this);
+        mapTitle.setText("HARTA GPS - POZITIA CAMIONULUI");
+        mapTitle.setTextColor(Color.rgb(20, 45, 70));
+        mapTitle.setTextSize(18);
+        mapTitle.setTypeface(null, Typeface.BOLD);
+        mapTitle.setGravity(Gravity.CENTER);
+        mapTitle.setPadding(5, 15, 5, 12);
+
+        layout.addView(mapTitle);
+
+        mapView = new MapView(this);
+
+        layout.addView(mapView,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 280));
+
         scroll.addView(layout);
         setContentView(scroll);
+
+        initializeMap();
     }
+
+    // BUTOANE
 
     private void addButton(String name, Runnable action) {
 
         Button button = new Button(this);
+
         button.setText(name);
         button.setTextColor(Color.WHITE);
-        button.setTextSize(17);
-        button.setAllCaps(false);
-        button.setTypeface(null, Typeface.BOLD);
+        button.setTextSize(18);
+        button.setAllCaps(true);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setGravity(Gravity.CENTER);
+        button.setVisibility(View.VISIBLE);
 
         GradientDrawable background = new GradientDrawable();
         background.setColor(BLUE);
@@ -195,9 +231,9 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 65);
+                        LinearLayout.LayoutParams.MATCH_PARENT, 70);
 
-        params.setMargins(0, 6, 0, 6);
+        params.setMargins(0, 7, 0, 7);
 
         layout.addView(button, params);
 
@@ -212,13 +248,72 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    // CAUTARE PARCARI, MOTORINA SI SERVICE
+    // INITIALIZARE HARTA
+
+    private void initializeMap() {
+
+        if (mapView == null) return;
+
+        mapView.onCreate(null);
+        mapView.onStart();
+
+        if (!activityPaused) {
+            mapView.onResume();
+        }
+
+        mapView.getMapAsync(mapLibreMap -> {
+
+            map = mapLibreMap;
+
+            map.setStyle(
+                    "https://tiles.openfreemap.org/styles/liberty",
+                    style -> {
+
+                        double lat = latitude != 0 ? latitude : 45.4642;
+                        double lon = longitude != 0 ? longitude : 9.1900;
+
+                        map.setCameraPosition(
+                                new CameraPosition.Builder()
+                                        .target(new LatLng(lat, lon))
+                                        .zoom(12)
+                                        .build());
+
+                        addTruckMarker(lat, lon);
+                    });
+        });
+    }
+
+    private void addTruckMarker(double lat, double lon) {
+
+        if (map == null) return;
+
+        if (truckMarker != null) {
+            map.removeMarker(truckMarker);
+        }
+
+        truckMarker = map.addMarker(
+                new MarkerOptions()
+                        .position(new LatLng(lat, lon))
+                        .title("CAMIONUL MEU"));
+    }
+
+    private void updateTruckPosition() {
+
+        if (map == null || latitude == 0 || longitude == 0) {
+            return;
+        }
+
+        addTruckMarker(latitude, longitude);
+    }
+
+    // CAUTARE LOCATII
 
     private void searchPlaces(String category) {
 
         if (latitude == 0 || longitude == 0) {
             status.setText("Asteptam pozitia GPS...");
             getGPS();
+
             Toast.makeText(this,
                     "Activeaza localizarea GPS.",
                     Toast.LENGTH_LONG).show();
@@ -237,16 +332,21 @@ public class MainActivity extends Activity {
                 String query = "[out:json][timeout:25];(";
 
                 if (category.equals("parking")) {
+
                     query +=
                             "node(around:25000," + searchLat + "," + searchLon + ")[amenity=parking];" +
                             "way(around:25000," + searchLat + "," + searchLon + ")[amenity=parking];" +
                             "relation(around:25000," + searchLat + "," + searchLon + ")[amenity=parking];";
+
                 } else if (category.equals("fuel")) {
+
                     query +=
                             "node(around:25000," + searchLat + "," + searchLon + ")[amenity=fuel];" +
                             "way(around:25000," + searchLat + "," + searchLon + ")[amenity=fuel];" +
                             "relation(around:25000," + searchLat + "," + searchLon + ")[amenity=fuel];";
+
                 } else {
+
                     query +=
                             "node(around:25000," + searchLat + "," + searchLon + ")[shop=truck];" +
                             "way(around:25000," + searchLat + "," + searchLon + ")[shop=truck];" +
@@ -270,7 +370,7 @@ public class MainActivity extends Activity {
 
                 if (response == null) {
                     if (lastError != null) throw lastError;
-                    throw new Exception("Serverele de cautare nu raspund.");
+                    throw new Exception("Serverele nu raspund.");
                 }
 
                 JSONObject json = new JSONObject(response);
@@ -288,10 +388,12 @@ public class MainActivity extends Activity {
                     if (item.has("lat") && item.has("lon")) {
                         lat = item.getDouble("lat");
                         lon = item.getDouble("lon");
+
                     } else if (item.has("center")) {
                         JSONObject center = item.getJSONObject("center");
                         lat = center.getDouble("lat");
                         lon = center.getDouble("lon");
+
                     } else {
                         continue;
                     }
@@ -312,7 +414,8 @@ public class MainActivity extends Activity {
                             lat, lon, distance);
 
                     if (distance[0] <= 25000) {
-                        places.add(new Place(name, lat, lon, distance[0]));
+                        places.add(new Place(
+                                name, lat, lon, distance[0]));
                     }
                 }
 
@@ -325,8 +428,9 @@ public class MainActivity extends Activity {
 
                 runOnUiThread(() -> {
                     status.setText("Cautarea nu este disponibila momentan.");
+
                     Toast.makeText(this,
-                            "Serverul nu a raspuns. Incearca din nou mai tarziu.",
+                            "Serverele de cautare nu au raspuns. Incearca mai tarziu.",
                             Toast.LENGTH_LONG).show();
                 });
             }
@@ -342,47 +446,51 @@ public class MainActivity extends Activity {
         HttpURLConnection connection =
                 (HttpURLConnection) url.openConnection();
 
-        connection.setRequestMethod("POST");
-        connection.setConnectTimeout(12000);
-        connection.setReadTimeout(30000);
-        connection.setDoOutput(true);
+        try {
 
-        connection.setRequestProperty(
-                "Content-Type",
-                "application/x-www-form-urlencoded");
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(12000);
+            connection.setReadTimeout(30000);
+            connection.setDoOutput(true);
 
-        connection.setRequestProperty(
-                "User-Agent",
-                "GPS-ALEX-TRUCK-NAVI/1.0");
+            connection.setRequestProperty(
+                    "Content-Type",
+                    "application/x-www-form-urlencoded");
 
-        String data = "data=" + URLEncoder.encode(query, "UTF-8");
+            connection.setRequestProperty(
+                    "User-Agent",
+                    "GPS-ALEX-TRUCK-NAVI/1.0");
 
-        OutputStream output = connection.getOutputStream();
-        output.write(data.getBytes("UTF-8"));
-        output.flush();
-        output.close();
+            String data = "data=" + URLEncoder.encode(query, "UTF-8");
 
-        int responseCode = connection.getResponseCode();
+            OutputStream output = connection.getOutputStream();
+            output.write(data.getBytes("UTF-8"));
+            output.flush();
+            output.close();
 
-        if (responseCode != 200) {
+            int responseCode = connection.getResponseCode();
+
+            if (responseCode != 200) {
+                throw new Exception("HTTP " + responseCode);
+            }
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(connection.getInputStream()));
+
+            StringBuilder result = new StringBuilder();
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                result.append(line);
+            }
+
+            reader.close();
+
+            return result.toString();
+
+        } finally {
             connection.disconnect();
-            throw new Exception("HTTP " + responseCode);
         }
-
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(connection.getInputStream()));
-
-        StringBuilder result = new StringBuilder();
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-            result.append(line);
-        }
-
-        reader.close();
-        connection.disconnect();
-
-        return result.toString();
     }
 
     private void showPlaces(ArrayList<Place> places, String category) {
@@ -396,6 +504,7 @@ public class MainActivity extends Activity {
 
         for (int i = 0; i < places.size(); i++) {
             Place p = places.get(i);
+
             names[i] = p.name + "\n" +
                     String.format("%.1f km", p.distance / 1000f);
         }
@@ -422,9 +531,11 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    // HARTA GPS
+    // HARTA PE TOT ECRANUL
 
     private void showMap() {
+
+        destroyCurrentMap();
 
         mapOpened = true;
 
@@ -490,43 +601,14 @@ public class MainActivity extends Activity {
         setContentView(screen);
 
         back.setOnClickListener(v -> returnHome());
-
         addressButton.setOnClickListener(v -> searchAddress());
-
         coordinateButton.setOnClickListener(v -> searchCoordinates());
-
         navigateButton.setOnClickListener(v -> navigateToDestination());
 
-        mapView.onCreate(null);
-        mapView.onStart();
-        mapView.onResume();
-
-        mapView.getMapAsync(mapLibreMap -> {
-
-            map = mapLibreMap;
-
-            map.setStyle(
-                    "https://tiles.openfreemap.org/styles/liberty",
-                    style -> {
-
-                        if (latitude != 0 && longitude != 0) {
-                            map.setCameraPosition(
-                                    new CameraPosition.Builder()
-                                            .target(new LatLng(latitude, longitude))
-                                            .zoom(12)
-                                            .build());
-                        } else {
-                            map.setCameraPosition(
-                                    new CameraPosition.Builder()
-                                            .target(new LatLng(45.4642, 9.1900))
-                                            .zoom(5)
-                                            .build());
-                        }
-                    });
-        });
+        initializeMap();
     }
 
-    // CAUTARE ADRESA CU OPENSTREETMAP
+    // CAUTARE ADRESA
 
     private void searchAddress() {
 
@@ -545,6 +627,8 @@ public class MainActivity extends Activity {
 
         new Thread(() -> {
 
+            HttpURLConnection connection = null;
+
             try {
 
                 String urlText =
@@ -553,8 +637,7 @@ public class MainActivity extends Activity {
 
                 URL url = new URL(urlText);
 
-                HttpURLConnection connection =
-                        (HttpURLConnection) url.openConnection();
+                connection = (HttpURLConnection) url.openConnection();
 
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(15000);
@@ -575,7 +658,6 @@ public class MainActivity extends Activity {
                 }
 
                 reader.close();
-                connection.disconnect();
 
                 JSONArray results = new JSONArray(result.toString());
 
@@ -598,14 +680,17 @@ public class MainActivity extends Activity {
 
                 runOnUiThread(() ->
                         Toast.makeText(this,
-                                "Eroare la cautarea adresei. Incearca din nou.",
+                                "Eroare la cautarea adresei. Incearca mai tarziu.",
                                 Toast.LENGTH_LONG).show());
+
+            } finally {
+                if (connection != null) connection.disconnect();
             }
 
         }).start();
     }
 
-    // INTRODUCERE COORDONATE
+    // COORDONATE GPS
 
     private void searchCoordinates() {
 
@@ -622,7 +707,8 @@ public class MainActivity extends Activity {
             double lat = Double.parseDouble(parts[0]);
             double lon = Double.parseDouble(parts[1]);
 
-            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+            if (lat < -90 || lat > 90 ||
+                    lon < -180 || lon > 180) {
                 throw new Exception();
             }
 
@@ -713,6 +799,7 @@ public class MainActivity extends Activity {
             if (location != null) {
                 latitude = location.getLatitude();
                 longitude = location.getLongitude();
+                updateTruckPosition();
             }
 
             locationManager.requestLocationUpdates(
@@ -723,8 +810,11 @@ public class MainActivity extends Activity {
 
                         @Override
                         public void onLocationChanged(Location loc) {
+
                             latitude = loc.getLatitude();
                             longitude = loc.getLongitude();
+
+                            updateTruckPosition();
                         }
 
                         @Override
@@ -739,13 +829,16 @@ public class MainActivity extends Activity {
                     });
 
         } catch (Exception e) {
+
             if (status != null) {
                 status.setText("GPS indisponibil.");
             }
         }
     }
 
-    private void returnHome() {
+    // GESTIONAREA HARTII
+
+    private void destroyCurrentMap() {
 
         if (mapView != null) {
             mapView.onPause();
@@ -755,7 +848,15 @@ public class MainActivity extends Activity {
         }
 
         map = null;
+        truckMarker = null;
+    }
+
+    private void returnHome() {
+
+        destroyCurrentMap();
+
         mapOpened = false;
+
         showHome();
     }
 
@@ -772,25 +873,68 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (mapView != null) mapView.onPause();
+
+        activityPaused = true;
+
+        if (mapView != null) {
+            mapView.onPause();
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (mapView != null) mapView.onResume();
+
+        activityPaused = false;
+
+        if (mapView != null) {
+            mapView.onResume();
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (mapView != null) mapView.onDestroy();
+
+        if (mapView != null) {
+            mapView.onPause();
+            mapView.onStop();
+            mapView.onDestroy();
+            mapView = null;
+        }
+
+        if (locationManager != null) {
+            locationManager.removeUpdates(locationListener);
+        }
     }
+
+    private final LocationListener locationListener =
+            new LocationListener() {
+                @Override
+                public void onLocationChanged(Location loc) {
+                    latitude = loc.getLatitude();
+                    longitude = loc.getLongitude();
+                    updateTruckPosition();
+                }
+
+                @Override
+                public void onProviderEnabled(String provider) {}
+
+                @Override
+                public void onProviderDisabled(String provider) {}
+
+                @Override
+                public void onStatusChanged(
+                        String provider, int status, Bundle extras) {}
+            };
 
     @Override
     public void onLowMemory() {
         super.onLowMemory();
-        if (mapView != null) mapView.onLowMemory();
+
+        if (mapView != null) {
+            mapView.onLowMemory();
+        }
     }
 
     @Override
