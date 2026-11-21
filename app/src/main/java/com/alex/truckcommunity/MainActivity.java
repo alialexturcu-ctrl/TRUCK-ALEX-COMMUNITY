@@ -16,6 +16,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -46,19 +47,28 @@ public class MainActivity extends Activity {
     private TextView status;
     private MapView mapView;
     private MapLibreMap map;
-
     private LocationManager locationManager;
+
+    private EditText addressInput;
+    private EditText coordinateInput;
 
     private double latitude = 0;
     private double longitude = 0;
 
+    private double destinationLat = 0;
+    private double destinationLon = 0;
+
     private static final int GPS_PERMISSION = 100;
-    private static final String OVERPASS =
-            "https://overpass.kumi.systems/api/interpreter";
 
     private final int BLUE = Color.rgb(30, 75, 115);
 
     private boolean mapOpened = false;
+
+    private static final String[] OVERPASS_SERVERS = {
+            "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter"
+    };
 
     private static class Place {
         String name;
@@ -93,7 +103,7 @@ public class MainActivity extends Activity {
 
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(20, 25, 20, 30);
+        layout.setPadding(20, 20, 20, 25);
         layout.setBackgroundColor(Color.WHITE);
 
         TextView title = new TextView(this);
@@ -102,7 +112,7 @@ public class MainActivity extends Activity {
         title.setTextSize(30);
         title.setGravity(Gravity.CENTER);
         title.setTypeface(null, Typeface.BOLD);
-        title.setPadding(5, 15, 5, 15);
+        title.setPadding(5, 12, 5, 12);
 
         layout.addView(title);
 
@@ -111,11 +121,11 @@ public class MainActivity extends Activity {
         subtitle.setTextColor(Color.DKGRAY);
         subtitle.setTextSize(16);
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(5, 0, 5, 20);
+        subtitle.setPadding(5, 0, 5, 15);
 
         layout.addView(subtitle);
 
-        addButton("HARTA GPS", () -> showMap());
+        addButton("HARTA GPS", this::showMap);
 
         addButton("CAMION", () ->
                 showMessage("CAMION",
@@ -146,18 +156,13 @@ public class MainActivity extends Activity {
         searchTitle.setTextSize(20);
         searchTitle.setTypeface(null, Typeface.BOLD);
         searchTitle.setGravity(Gravity.CENTER);
-        searchTitle.setPadding(5, 25, 5, 10);
+        searchTitle.setPadding(5, 22, 5, 10);
 
         layout.addView(searchTitle);
 
-        addButton("PARCARI TIR", () ->
-                searchPlaces("parking"));
-
-        addButton("MOTORINA", () ->
-                searchPlaces("fuel"));
-
-        addButton("SERVICE CAMIOANE", () ->
-                searchPlaces("service"));
+        addButton("PARCARI TIR", () -> searchPlaces("parking"));
+        addButton("MOTORINA", () -> searchPlaces("fuel"));
+        addButton("SERVICE CAMIOANE", () -> searchPlaces("service"));
 
         status = new TextView(this);
         status.setText("GPS ALEX pregatit pentru navigare");
@@ -190,9 +195,9 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 70);
+                        LinearLayout.LayoutParams.MATCH_PARENT, 65);
 
-        params.setMargins(0, 7, 0, 7);
+        params.setMargins(0, 6, 0, 6);
 
         layout.addView(button, params);
 
@@ -200,13 +205,14 @@ public class MainActivity extends Activity {
     }
 
     private void showMessage(String title, String message) {
-
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton("INCHIDE", null)
                 .show();
     }
+
+    // CAUTARE PARCARI, MOTORINA SI SERVICE
 
     private void searchPlaces(String category) {
 
@@ -228,104 +234,46 @@ public class MainActivity extends Activity {
 
             try {
 
-                String filter;
+                String query = "[out:json][timeout:25];(";
 
                 if (category.equals("parking")) {
-                    filter = "[\"amenity\"=\"parking\"]";
+                    query +=
+                            "node(around:25000," + searchLat + "," + searchLon + ")[amenity=parking];" +
+                            "way(around:25000," + searchLat + "," + searchLon + ")[amenity=parking];" +
+                            "relation(around:25000," + searchLat + "," + searchLon + ")[amenity=parking];";
                 } else if (category.equals("fuel")) {
-                    filter = "[\"amenity\"=\"fuel\"]";
+                    query +=
+                            "node(around:25000," + searchLat + "," + searchLon + ")[amenity=fuel];" +
+                            "way(around:25000," + searchLat + "," + searchLon + ")[amenity=fuel];" +
+                            "relation(around:25000," + searchLat + "," + searchLon + ")[amenity=fuel];";
                 } else {
-                    filter = "[\"shop\"=\"truck\"]" +
-                            ";way(around:25000," +
-                            searchLat + "," + searchLon +
-                            ")[\"craft\"=\"truck_repair\"]";
-                }
-
-                String query =
-                        "[out:json][timeout:35];(";
-
-                if (category.equals("service")) {
-
                     query +=
-                            "node(around:25000," + searchLat + "," +
-                            searchLon + ")[\"shop\"=\"truck\"];";
-
-                    query +=
-                            "way(around:25000," + searchLat + "," +
-                            searchLon + ")[\"shop\"=\"truck\"];";
-
-                    query +=
-                            "node(around:25000," + searchLat + "," +
-                            searchLon + ")[\"craft\"=\"truck_repair\"];";
-
-                    query +=
-                            "way(around:25000," + searchLat + "," +
-                            searchLon + ")[\"craft\"=\"truck_repair\"];";
-
-                } else {
-
-                    query +=
-                            "node(around:25000," + searchLat + "," +
-                            searchLon + ")" + filter + ";";
-
-                    query +=
-                            "way(around:25000," + searchLat + "," +
-                            searchLon + ")" + filter + ";";
-
-                    query +=
-                            "relation(around:25000," + searchLat + "," +
-                            searchLon + ")" + filter + ";";
+                            "node(around:25000," + searchLat + "," + searchLon + ")[shop=truck];" +
+                            "way(around:25000," + searchLat + "," + searchLon + ")[shop=truck];" +
+                            "node(around:25000," + searchLat + "," + searchLon + ")[craft=truck_repair];" +
+                            "way(around:25000," + searchLat + "," + searchLon + ")[craft=truck_repair];";
                 }
 
                 query += ");out center tags;";
 
-                URL url = new URL(OVERPASS);
+                String response = null;
+                Exception lastError = null;
 
-                HttpURLConnection connection =
-                        (HttpURLConnection) url.openConnection();
-
-                connection.setRequestMethod("POST");
-                connection.setConnectTimeout(20000);
-                connection.setReadTimeout(45000);
-                connection.setDoOutput(true);
-
-                connection.setRequestProperty(
-                        "Content-Type",
-                        "application/x-www-form-urlencoded");
-
-                connection.setRequestProperty(
-                        "User-Agent",
-                        "GPS-ALEX-TRUCK-NAVI/1.0");
-
-                String data = "data=" +
-                        URLEncoder.encode(query, "UTF-8");
-
-                OutputStream output = connection.getOutputStream();
-                output.write(data.getBytes("UTF-8"));
-                output.flush();
-                output.close();
-
-                int responseCode = connection.getResponseCode();
-
-                if (responseCode != 200) {
-                    throw new Exception("Server HTTP " + responseCode);
+                for (String server : OVERPASS_SERVERS) {
+                    try {
+                        response = postOverpass(server, query);
+                        if (response != null) break;
+                    } catch (Exception e) {
+                        lastError = e;
+                    }
                 }
 
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(
-                                connection.getInputStream()));
-
-                StringBuilder result = new StringBuilder();
-                String line;
-
-                while ((line = reader.readLine()) != null) {
-                    result.append(line);
+                if (response == null) {
+                    if (lastError != null) throw lastError;
+                    throw new Exception("Serverele de cautare nu raspund.");
                 }
 
-                reader.close();
-                connection.disconnect();
-
-                JSONObject json = new JSONObject(result.toString());
+                JSONObject json = new JSONObject(response);
                 JSONArray elements = json.getJSONArray("elements");
 
                 ArrayList<Place> places = new ArrayList<>();
@@ -364,8 +312,7 @@ public class MainActivity extends Activity {
                             lat, lon, distance);
 
                     if (distance[0] <= 25000) {
-                        places.add(new Place(
-                                name, lat, lon, distance[0]));
+                        places.add(new Place(name, lat, lon, distance[0]));
                     }
                 }
 
@@ -377,15 +324,65 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
 
                 runOnUiThread(() -> {
-                    status.setText("Eroare la cautare: " +
-                            e.getMessage());
+                    status.setText("Cautarea nu este disponibila momentan.");
                     Toast.makeText(this,
-                            "Serverul de cautare nu a raspuns.",
+                            "Serverul nu a raspuns. Incearca din nou mai tarziu.",
                             Toast.LENGTH_LONG).show();
                 });
             }
 
         }).start();
+    }
+
+    private String postOverpass(String server, String query)
+            throws Exception {
+
+        URL url = new URL(server);
+
+        HttpURLConnection connection =
+                (HttpURLConnection) url.openConnection();
+
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(12000);
+        connection.setReadTimeout(30000);
+        connection.setDoOutput(true);
+
+        connection.setRequestProperty(
+                "Content-Type",
+                "application/x-www-form-urlencoded");
+
+        connection.setRequestProperty(
+                "User-Agent",
+                "GPS-ALEX-TRUCK-NAVI/1.0");
+
+        String data = "data=" + URLEncoder.encode(query, "UTF-8");
+
+        OutputStream output = connection.getOutputStream();
+        output.write(data.getBytes("UTF-8"));
+        output.flush();
+        output.close();
+
+        int responseCode = connection.getResponseCode();
+
+        if (responseCode != 200) {
+            connection.disconnect();
+            throw new Exception("HTTP " + responseCode);
+        }
+
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(connection.getInputStream()));
+
+        StringBuilder result = new StringBuilder();
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+            result.append(line);
+        }
+
+        reader.close();
+        connection.disconnect();
+
+        return result.toString();
     }
 
     private void showPlaces(ArrayList<Place> places, String category) {
@@ -398,15 +395,12 @@ public class MainActivity extends Activity {
         String[] names = new String[places.size()];
 
         for (int i = 0; i < places.size(); i++) {
-
             Place p = places.get(i);
-
             names[i] = p.name + "\n" +
                     String.format("%.1f km", p.distance / 1000f);
         }
 
-        status.setText("Au fost gasite " +
-                places.size() + " locatii.");
+        status.setText("Au fost gasite " + places.size() + " locatii.");
 
         String title;
 
@@ -422,26 +416,269 @@ public class MainActivity extends Activity {
                 .setTitle(title + " - 25 KM")
                 .setItems(names, (dialog, which) -> {
                     Place selected = places.get(which);
-                    openGoogleMaps(selected);
+                    openGoogleMaps(selected.lat, selected.lon);
                 })
                 .setNegativeButton("INCHIDE", null)
                 .show();
     }
 
-    private void openGoogleMaps(Place place) {
+    // HARTA GPS
 
-        String destination =
-                place.name + "," + place.lat + "," + place.lon;
+    private void showMap() {
+
+        mapOpened = true;
+
+        LinearLayout screen = new LinearLayout(this);
+        screen.setOrientation(LinearLayout.VERTICAL);
+        screen.setBackgroundColor(Color.WHITE);
+
+        Button back = new Button(this);
+        back.setText("INAPOI LA GPS ALEX");
+        back.setTextColor(Color.WHITE);
+        back.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(BLUE));
+
+        screen.addView(back);
+
+        addressInput = new EditText(this);
+        addressInput.setSingleLine(true);
+        addressInput.setTextSize(16);
+        addressInput.setHint("Cauta adresa sau localitatea...");
+        addressInput.setPadding(15, 8, 15, 8);
+
+        screen.addView(addressInput,
+                new LinearLayout.LayoutParams(-1, 55));
+
+        Button addressButton = new Button(this);
+        addressButton.setText("CAUTA ADRESA");
+        addressButton.setTextColor(Color.WHITE);
+        addressButton.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(BLUE));
+
+        screen.addView(addressButton);
+
+        coordinateInput = new EditText(this);
+        coordinateInput.setSingleLine(true);
+        coordinateInput.setTextSize(16);
+        coordinateInput.setHint("Coordonate: 45.4642, 9.1900");
+        coordinateInput.setPadding(15, 8, 15, 8);
+
+        screen.addView(coordinateInput,
+                new LinearLayout.LayoutParams(-1, 55));
+
+        Button coordinateButton = new Button(this);
+        coordinateButton.setText("CAUTA COORDONATE");
+        coordinateButton.setTextColor(Color.WHITE);
+        coordinateButton.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(BLUE));
+
+        screen.addView(coordinateButton);
+
+        Button navigateButton = new Button(this);
+        navigateButton.setText("NAVIGHEAZA LA DESTINATIE");
+        navigateButton.setTextColor(Color.WHITE);
+        navigateButton.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(BLUE));
+
+        screen.addView(navigateButton);
+
+        mapView = new MapView(this);
+
+        screen.addView(mapView,
+                new LinearLayout.LayoutParams(-1, 0, 1));
+
+        setContentView(screen);
+
+        back.setOnClickListener(v -> returnHome());
+
+        addressButton.setOnClickListener(v -> searchAddress());
+
+        coordinateButton.setOnClickListener(v -> searchCoordinates());
+
+        navigateButton.setOnClickListener(v -> navigateToDestination());
+
+        mapView.onCreate(null);
+        mapView.onStart();
+        mapView.onResume();
+
+        mapView.getMapAsync(mapLibreMap -> {
+
+            map = mapLibreMap;
+
+            map.setStyle(
+                    "https://tiles.openfreemap.org/styles/liberty",
+                    style -> {
+
+                        if (latitude != 0 && longitude != 0) {
+                            map.setCameraPosition(
+                                    new CameraPosition.Builder()
+                                            .target(new LatLng(latitude, longitude))
+                                            .zoom(12)
+                                            .build());
+                        } else {
+                            map.setCameraPosition(
+                                    new CameraPosition.Builder()
+                                            .target(new LatLng(45.4642, 9.1900))
+                                            .zoom(5)
+                                            .build());
+                        }
+                    });
+        });
+    }
+
+    // CAUTARE ADRESA CU OPENSTREETMAP
+
+    private void searchAddress() {
+
+        String address = addressInput.getText().toString().trim();
+
+        if (address.isEmpty()) {
+            Toast.makeText(this,
+                    "Introdu o adresa.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this,
+                "Se cauta adresa...",
+                Toast.LENGTH_SHORT).show();
+
+        new Thread(() -> {
+
+            try {
+
+                String urlText =
+                        "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" +
+                        URLEncoder.encode(address, "UTF-8");
+
+                URL url = new URL(urlText);
+
+                HttpURLConnection connection =
+                        (HttpURLConnection) url.openConnection();
+
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(20000);
+
+                connection.setRequestProperty(
+                        "User-Agent",
+                        "GPS-ALEX-TRUCK-NAVI/1.0");
+
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream()));
+
+                StringBuilder result = new StringBuilder();
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    result.append(line);
+                }
+
+                reader.close();
+                connection.disconnect();
+
+                JSONArray results = new JSONArray(result.toString());
+
+                if (results.length() == 0) {
+                    runOnUiThread(() ->
+                            Toast.makeText(this,
+                                    "Adresa nu a fost gasita.",
+                                    Toast.LENGTH_LONG).show());
+                    return;
+                }
+
+                JSONObject item = results.getJSONObject(0);
+
+                double lat = Double.parseDouble(item.getString("lat"));
+                double lon = Double.parseDouble(item.getString("lon"));
+
+                runOnUiThread(() -> setDestination(lat, lon));
+
+            } catch (Exception e) {
+
+                runOnUiThread(() ->
+                        Toast.makeText(this,
+                                "Eroare la cautarea adresei. Incearca din nou.",
+                                Toast.LENGTH_LONG).show());
+            }
+
+        }).start();
+    }
+
+    // INTRODUCERE COORDONATE
+
+    private void searchCoordinates() {
+
+        String value = coordinateInput.getText().toString().trim();
+
+        try {
+
+            String[] parts = value.split("[,;\\s]+");
+
+            if (parts.length != 2) {
+                throw new Exception();
+            }
+
+            double lat = Double.parseDouble(parts[0]);
+            double lon = Double.parseDouble(parts[1]);
+
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                throw new Exception();
+            }
+
+            setDestination(lat, lon);
+
+        } catch (Exception e) {
+
+            Toast.makeText(this,
+                    "Introdu coordonatele astfel: 45.4642, 9.1900",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void setDestination(double lat, double lon) {
+
+        destinationLat = lat;
+        destinationLon = lon;
+
+        if (map != null) {
+            map.setCameraPosition(
+                    new CameraPosition.Builder()
+                            .target(new LatLng(lat, lon))
+                            .zoom(15)
+                            .build());
+        }
+
+        Toast.makeText(this,
+                "Destinatia a fost selectata.",
+                Toast.LENGTH_LONG).show();
+    }
+
+    private void navigateToDestination() {
+
+        if (destinationLat == 0 && destinationLon == 0) {
+            Toast.makeText(this,
+                    "Cauta mai intai o adresa sau coordonate.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        openGoogleMaps(destinationLat, destinationLon);
+    }
+
+    private void openGoogleMaps(double lat, double lon) {
 
         String url =
-                "https://www.google.com/maps/search/?api=1&query=" +
-                Uri.encode(destination);
+                "https://www.google.com/maps/dir/?api=1&destination=" +
+                lat + "," + lon;
 
         Intent intent = new Intent(
                 Intent.ACTION_VIEW, Uri.parse(url));
 
         startActivity(intent);
     }
+
+    // GPS
 
     private void getGPS() {
 
@@ -508,55 +745,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void showMap() {
-
-        mapOpened = true;
-
-        LinearLayout screen = new LinearLayout(this);
-        screen.setOrientation(LinearLayout.VERTICAL);
-
-        Button back = new Button(this);
-        back.setText("INAPOI LA GPS ALEX");
-        back.setTextColor(Color.WHITE);
-        back.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(BLUE));
-
-        screen.addView(back);
-
-        mapView = new MapView(this);
-
-        screen.addView(mapView,
-                new LinearLayout.LayoutParams(-1, 0, 1));
-
-        setContentView(screen);
-
-        mapView.onCreate(null);
-        mapView.onStart();
-        mapView.onResume();
-
-        mapView.getMapAsync(mapLibreMap -> {
-
-            map = mapLibreMap;
-
-            map.setStyle(
-                    "https://tiles.openfreemap.org/styles/liberty",
-                    style -> {
-
-                        if (latitude != 0 && longitude != 0) {
-
-                            map.setCameraPosition(
-                                    new CameraPosition.Builder()
-                                            .target(new LatLng(
-                                                    latitude, longitude))
-                                            .zoom(12)
-                                            .build());
-                        }
-                    });
-        });
-
-        back.setOnClickListener(v -> returnHome());
-    }
-
     private void returnHome() {
 
         if (mapView != null) {
@@ -566,6 +754,7 @@ public class MainActivity extends Activity {
             mapView = null;
         }
 
+        map = null;
         mapOpened = false;
         showHome();
     }
