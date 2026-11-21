@@ -7,12 +7,14 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -31,10 +33,11 @@ import org.osmdroid.views.overlay.Marker;
 import org.osmdroid.views.overlay.Polyline;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.URLEncoder;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -46,11 +49,9 @@ public class MainActivity extends Activity
 
     private MapView map;
     private EditText startInput, destinationInput, coordinateInput;
+    private TextView statusText, distanceText, durationText, maneuverText;
 
-    private TextView statusText, distanceText;
-    private TextView durationText, maneuverText;
-
-    private Button routeButton;
+    private Button routeButton, voiceButton;
 
     private LocationManager locationManager;
     private Location currentLocation;
@@ -67,8 +68,7 @@ public class MainActivity extends Activity
 
     private GeoPoint destinationPoint;
 
-    private final List<String> instructions =
-            new ArrayList<>();
+    private final List<String> instructions = new ArrayList<>();
 
     private static final int LOCATION_PERMISSION = 1001;
 
@@ -102,9 +102,10 @@ public class MainActivity extends Activity
                 new GeoPoint(45.0, 10.0)
         );
 
-        map.getOverlays().add(
-                new MapEventsOverlay(this)
-        );
+        MapEventsOverlay eventsOverlay =
+                new MapEventsOverlay(this);
+
+        map.getOverlays().add(eventsOverlay);
     }
 
     private void createInterface() {
@@ -114,7 +115,9 @@ public class MainActivity extends Activity
 
         root.addView(
                 map,
-                new FrameLayout.LayoutParams(-1, -1)
+                new FrameLayout.LayoutParams(
+                        -1, -1
+                )
         );
 
         LinearLayout topPanel = new LinearLayout(this);
@@ -128,7 +131,6 @@ public class MainActivity extends Activity
         title.setTextSize(21);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-
         topPanel.addView(title);
 
         TextView subtitle = new TextView(this);
@@ -136,27 +138,22 @@ public class MainActivity extends Activity
         subtitle.setTextColor(WHITE);
         subtitle.setTextSize(11);
         subtitle.setGravity(Gravity.CENTER);
-
         topPanel.addView(subtitle);
 
-        startInput = createInput(
-                "Plecare: adresă sau gol pentru GPS"
-        );
-
-        destinationInput = createInput(
-                "Destinație: introdu adresa"
-        );
+        startInput = createInput("Plecare: adresă sau gol pentru GPS");
+        destinationInput = createInput("Destinație: introdu adresa");
 
         coordinateInput = createInput(
-                "Coordonate: latitudine, longitudine"
+                "Coordonate destinație: latitudine, longitudine"
         );
 
         topPanel.addView(startInput);
         topPanel.addView(destinationInput);
         topPanel.addView(coordinateInput);
 
-        Button coordinateButton =
-                createButton("FOLOSEȘTE COORDONATELE");
+        Button coordinateButton = createButton(
+                "FOLOSEȘTE COORDONATELE"
+        );
 
         coordinateButton.setOnClickListener(v ->
                 useCoordinates()
@@ -164,8 +161,7 @@ public class MainActivity extends Activity
 
         topPanel.addView(coordinateButton);
 
-        routeButton =
-                createButton("CALCULEAZĂ TRASEUL");
+        routeButton = createButton("CALCULEAZĂ TRASEUL");
 
         routeButton.setOnClickListener(v ->
                 calculateRoute()
@@ -175,7 +171,9 @@ public class MainActivity extends Activity
 
         FrameLayout.LayoutParams topParams =
                 new FrameLayout.LayoutParams(
-                        -1, -2, Gravity.TOP
+                        -1,
+                        -2,
+                        Gravity.TOP
                 );
 
         topParams.setMargins(10, 10, 10, 0);
@@ -196,8 +194,7 @@ public class MainActivity extends Activity
         bottomPanel.addView(durationText);
         bottomPanel.addView(maneuverText);
 
-        Button voiceButton =
-                createButton("ASCULTĂ MANEVRELE");
+        voiceButton = createButton("ASCULTĂ MANEVRELE");
 
         voiceButton.setOnClickListener(v ->
                 speakInstructions()
@@ -211,12 +208,13 @@ public class MainActivity extends Activity
 
         attribution.setTextSize(10);
         attribution.setGravity(Gravity.CENTER);
-
         bottomPanel.addView(attribution);
 
         FrameLayout.LayoutParams bottomParams =
                 new FrameLayout.LayoutParams(
-                        -1, -2, Gravity.BOTTOM
+                        -1,
+                        -2,
+                        Gravity.BOTTOM
                 );
 
         bottomParams.setMargins(10, 0, 10, 10);
@@ -247,7 +245,8 @@ public class MainActivity extends Activity
 
         FrameLayout.LayoutParams zoomParams =
                 new FrameLayout.LayoutParams(
-                        85, -2,
+                        85,
+                        -2,
                         Gravity.RIGHT | Gravity.CENTER_VERTICAL
                 );
 
@@ -267,15 +266,14 @@ public class MainActivity extends Activity
         input.setSingleLine(true);
         input.setTextSize(13);
         input.setPadding(12, 4, 12, 4);
-
-        input.setBackground(
-                roundBackground(
-                        Color.rgb(48, 57, 66), 10
-                )
-        );
+        input.setBackground(roundBackground(
+                Color.rgb(48, 57, 66), 10
+        ));
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(-1, 48);
+                new LinearLayout.LayoutParams(
+                        -1, 48
+                );
 
         params.setMargins(0, 5, 0, 5);
         input.setLayoutParams(params);
@@ -283,32 +281,32 @@ public class MainActivity extends Activity
         return input;
     }
 
-    private TextView createText(String value) {
+    private TextView createText(String text) {
 
-        TextView text = new TextView(this);
+        TextView view = new TextView(this);
 
-        text.setText(value);
-        text.setTextColor(WHITE);
-        text.setTextSize(14);
-        text.setPadding(4, 5, 4, 5);
+        view.setText(text);
+        view.setTextColor(WHITE);
+        view.setTextSize(14);
+        view.setPadding(4, 5, 4, 5);
 
-        return text;
+        return view;
     }
 
-    private Button createButton(String value) {
+    private Button createButton(String text) {
 
         Button button = new Button(this);
 
-        button.setText(value);
+        button.setText(text);
         button.setTextColor(WHITE);
         button.setTextSize(12);
         button.setAllCaps(false);
-        button.setBackground(
-                roundBackground(GREEN, 12)
-        );
+        button.setBackground(roundBackground(GREEN, 12));
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(-1, 45);
+                new LinearLayout.LayoutParams(
+                        -1, 45
+                );
 
         params.setMargins(0, 5, 0, 5);
         button.setLayoutParams(params);
@@ -386,8 +384,7 @@ public class MainActivity extends Activity
         if (requestCode == LOCATION_PERMISSION) {
 
             if (grantResults.length > 0 &&
-                    grantResults[0] ==
-                            PackageManager.PERMISSION_GRANTED) {
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
                 startGps();
 
@@ -415,6 +412,7 @@ public class MainActivity extends Activity
                     checkSelfPermission(
                     Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED) {
+
                 return;
             }
 
@@ -424,6 +422,7 @@ public class MainActivity extends Activity
                     );
 
             if (last == null) {
+
                 last = locationManager.getLastKnownLocation(
                         LocationManager.NETWORK_PROVIDER
                 );
@@ -482,9 +481,10 @@ public class MainActivity extends Activity
         gpsMarker.setPosition(point);
 
         statusText.setText(
+                "GPS: " +
                 String.format(
                         Locale.US,
-                        "GPS: %.5f, %.5f",
+                        "%.5f, %.5f",
                         location.getLatitude(),
                         location.getLongitude()
                 )
@@ -536,6 +536,7 @@ public class MainActivity extends Activity
 
             if (latitude < -90 || latitude > 90 ||
                     longitude < -180 || longitude > 180) {
+
                 throw new Exception();
             }
 
@@ -608,6 +609,7 @@ public class MainActivity extends Activity
         destinationMarker.setTitle("Destinație");
 
         map.getOverlays().add(destinationMarker);
+
         map.invalidate();
     }
 
@@ -617,8 +619,7 @@ public class MainActivity extends Activity
                 destinationInput.getText().toString().trim();
 
         if (destinationPoint == null &&
-                (destination.isEmpty() ||
-                destination.equals("Punct selectat pe hartă"))) {
+                destination.isEmpty()) {
 
             Toast.makeText(
                     this,
@@ -634,7 +635,7 @@ public class MainActivity extends Activity
 
             Toast.makeText(
                     this,
-                    "Așteaptă poziția GPS sau introdu plecarea.",
+                    "GPS-ul nu are încă o poziție. Așteaptă sau introdu plecarea.",
                     Toast.LENGTH_LONG
             ).show();
 
@@ -701,28 +702,30 @@ public class MainActivity extends Activity
     private GeoPoint geocode(String address)
             throws Exception {
 
-        String encoded =
-                URLEncoder.encode(address, "UTF-8");
+        String encoded = URLEncoder.encode(
+                address,
+                "UTF-8"
+        );
 
         String url =
                 "https://nominatim.openstreetmap.org/search?q=" +
                 encoded +
                 "&format=json&limit=1";
 
-        JSONArray array =
-                new JSONArray(httpGet(url));
+        JSONArray array = new JSONArray(
+                httpGet(url)
+        );
 
         if (array.length() == 0) {
             return null;
         }
 
-        JSONObject result =
-                array.getJSONObject(0);
+        JSONObject result = array.getJSONObject(0);
 
-        return new GeoPoint(
-                result.getDouble("lat"),
-                result.getDouble("lon")
-        );
+        double lat = result.getDouble("lat");
+        double lon = result.getDouble("lon");
+
+        return new GeoPoint(lat, lon);
     }
 
     private void getRoute(
@@ -769,18 +772,17 @@ public class MainActivity extends Activity
             JSONArray coordinate =
                     coordinates.getJSONArray(i);
 
-            points.add(
-                    new GeoPoint(
-                            coordinate.getDouble(1),
-                            coordinate.getDouble(0)
-                    )
-            );
+            double lon = coordinate.getDouble(0);
+            double lat = coordinate.getDouble(1);
+
+            points.add(new GeoPoint(lat, lon));
         }
 
         ArrayList<String> newInstructions =
                 new ArrayList<>();
 
-        JSONArray legs = route.getJSONArray("legs");
+        JSONArray legs =
+                route.getJSONArray("legs");
 
         for (int i = 0; i < legs.length(); i++) {
 
@@ -790,18 +792,23 @@ public class MainActivity extends Activity
 
             for (int j = 0; j < steps.length(); j++) {
 
-                JSONObject step = steps.getJSONObject(j);
+                JSONObject step =
+                        steps.getJSONObject(j);
 
                 JSONObject maneuver =
                         step.getJSONObject("maneuver");
 
-                String instruction =
-                        translateManeuver(
-                                maneuver.optString("type"),
-                                maneuver.optString("modifier")
-                        );
+                String type =
+                        maneuver.optString("type");
 
-                String road = step.optString("name");
+                String modifier =
+                        maneuver.optString("modifier");
+
+                String road =
+                        step.optString("name");
+
+                String instruction =
+                        translateManeuver(type, modifier);
 
                 if (!road.isEmpty()) {
                     instruction += " pe " + road;
@@ -829,21 +836,12 @@ public class MainActivity extends Activity
 
             setDestinationMarker(end);
 
+            map.getController().setCenter(start);
             map.getController().zoomToSpan(
-                    Math.max(
-                            0.01,
-                            Math.abs(
-                                    start.getLatitude() -
-                                    end.getLatitude()
-                            ) + 0.02
-                    ),
-                    Math.max(
-                            0.01,
-                            Math.abs(
-                                    start.getLongitude() -
-                                    end.getLongitude()
-                            ) + 0.02
-                    )
+                    Math.abs(start.getLatitude() -
+                            end.getLatitude()) + 0.02,
+                    Math.abs(start.getLongitude() -
+                            end.getLongitude()) + 0.02
             );
 
             distanceText.setText(
@@ -862,7 +860,7 @@ public class MainActivity extends Activity
                     )
             );
 
-            if (!instructions.isEmpty()) {
+            if (instructions.size() > 0) {
 
                 maneuverText.setText(
                         "Prima manevră: " +
@@ -872,7 +870,7 @@ public class MainActivity extends Activity
             } else {
 
                 maneuverText.setText(
-                        "Nu există manevre disponibile."
+                        "Nu există instrucțiuni disponibile."
                 );
             }
 
@@ -934,6 +932,7 @@ public class MainActivity extends Activity
 
         if ("roundabout".equals(type) ||
                 "rotary".equals(type)) {
+
             return "Intră în sensul giratoriu";
         }
 
@@ -947,6 +946,10 @@ public class MainActivity extends Activity
 
         if ("continue".equals(type)) {
             return "Continuă înainte";
+        }
+
+        if ("new name".equals(type)) {
+            return "Continuă pe drumul următor";
         }
 
         return "Continuă pe traseu";
@@ -980,21 +983,27 @@ public class MainActivity extends Activity
 
             int code = connection.getResponseCode();
 
-            if (code < 200 || code >= 300) {
+            InputStream stream;
+
+            if (code >= 200 && code < 300) {
+                stream = connection.getInputStream();
+            } else {
+                stream = connection.getErrorStream();
                 throw new Exception(
-                        "Eroare server: " + code
+                        "Serverul a răspuns cu eroarea " + code
                 );
             }
 
             BufferedReader reader =
                     new BufferedReader(
                             new InputStreamReader(
-                                    connection.getInputStream(),
+                                    stream,
                                     "UTF-8"
                             )
                     );
 
-            StringBuilder result = new StringBuilder();
+            StringBuilder result =
+                    new StringBuilder();
 
             String line;
 
@@ -1109,7 +1118,6 @@ public class MainActivity extends Activity
 
     @Override
     public void onProviderDisabled(String provider) {
-
         runOnUiThread(() ->
                 statusText.setText("GPS dezactivat.")
         );
