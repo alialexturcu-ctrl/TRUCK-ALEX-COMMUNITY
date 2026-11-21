@@ -1,6 +1,7 @@
 package com.alex.truckcommunity;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -28,19 +29,29 @@ public class MainActivity extends Activity {
         title.setTextColor(Color.WHITE);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
+
         layout.addView(title);
 
-        addButton("HARTA GPS");
-        addButton("PROFIL TIR");
-        addButton("CAMION RIGID");
-        addButton("SETARI CAMION");
-        addButton("VOCE ROMANA");
-        addButton("DESPRE APLICATIE");
+        addButton("HARTA GPS", "Navigatia GPS va fi adaugata ulterior.");
+        addButton("PROFIL TIR",
+                "INALTIME: 4,00 m\nLATIME: 2,55 m\nLUNGIME: 16,50 m\nGREUTATE: 40 tone");
+
+        addButton("CAMION RIGID",
+                "INALTIME: 3,50 m\nLATIME: 2,55 m\nLUNGIME: 8,00 m\nGREUTATE: 18 tone\n2 axe");
+
+        addButton("SETARI CAMION",
+                "Alege profilul TIR sau camion rigid.");
+
+        addButton("VOCE ROMANA",
+                "Vocea romana va fi configurata intr-o etapa viitoare.");
+
+        addButton("DESPRE APLICATIE",
+                "TRUCK ALEX COMMUNITY\nVersiunea 1.0");
 
         setContentView(layout);
     }
 
-    private void addButton(String name) {
+    private void addButton(String name, String message) {
         Button button = new Button(this);
         button.setText(name);
         button.setTextSize(17);
@@ -48,10 +59,17 @@ public class MainActivity extends Activity {
         button.setBackgroundColor(Color.rgb(35, 100, 160));
 
         LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 65);
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 65);
 
         params.setMargins(0, 18, 0, 0);
         layout.addView(button, params);
+
+        button.setOnClickListener(v ->
+                new AlertDialog.Builder(this)
+                        .setTitle(name)
+                        .setMessage(message)
+                        .setPositiveButton("INCHIDE", null)
+                        .show());
     }
 }
