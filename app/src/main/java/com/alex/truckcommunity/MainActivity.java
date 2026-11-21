@@ -12,6 +12,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -56,6 +57,13 @@ public class MainActivity extends Activity {
     private Polyline routeLine;
 
     private LocationManager locationManager;
+    private TextToSpeech voice;
+
+    private boolean voiceReady = false;
+    private boolean navigationActive = false;
+    private boolean destinationSelected = false;
+    private boolean mapOpened = false;
+    private boolean isCalculatingRoute = false;
 
     private double latitude = 0;
     private double longitude = 0;
@@ -63,8 +71,13 @@ public class MainActivity extends Activity {
     private double destinationLat = 0;
     private double destinationLon = 0;
 
-    private boolean destinationSelected = false;
-    private boolean mapOpened = false;
+    private long lastRecalculation = 0;
+    private int offRouteCount = 0;
+    private int nextManeuver = 0;
+
+    private ArrayList<LatLng> routePoints = new ArrayList<>();
+    private ArrayList<RouteManeuver> routeManeuvers =
+        new ArrayList<>();
 
     private static final int GPS_PERMISSION = 100;
 
@@ -88,9 +101,26 @@ public class MainActivity extends Activity {
         }
     }
 
+    private static class RouteManeuver {
+        int shapeIndex;
+        double lat;
+        double lon;
+        String instruction;
+        boolean announced;
+
+        RouteManeuver(int index, double lat, double lon,
+                      String instruction) {
+            this.shapeIndex = index;
+            this.lat = lat;
+            this.lon = lon;
+            this.instruction = instruction;
+            this.announced = false;
+        }
+    }
+
     private int dp(float value) {
-        return (int) (value * getResources()
-            .getDisplayMetrics().density + 0.5f);
+        return (int) (value *
+            getResources().getDisplayMetrics().density + 0.5f);
     }
 
     @Override
@@ -102,8 +132,51 @@ public class MainActivity extends Activity {
         locationManager = (LocationManager)
             getSystemService(LOCATION_SERVICE);
 
+        initializeVoice();
+
         showHome();
         getGPS();
+    }
+
+    // VOCE ROMANA
+
+    private void initializeVoice() {
+
+        voice = new TextToSpeech(this, result -> {
+
+            if (result == TextToSpeech.SUCCESS) {
+
+                int languageResult =
+                    voice.setLanguage(new Locale("ro", "RO"));
+
+                voiceReady =
+                    languageResult != TextToSpeech.LANG_MISSING_DATA &&
+                    languageResult != TextToSpeech.LANG_NOT_SUPPORTED;
+
+                if (voiceReady) {
+                    voice.setSpeechRate(0.95f);
+                    voice.setPitch(1.0f);
+                }
+            }
+        });
+    }
+
+    private void speak(String message) {
+
+        if (voice != null && voiceReady && navigationActive) {
+            voice.speak(
+                message,
+                TextToSpeech.QUEUE_FLUSH,
+                null,
+                "GPS_ALEX_VOICE"
+            );
+        }
+    }
+
+    private void stopVoice() {
+        if (voice != null) {
+            voice.stop();
+        }
     }
 
     // MENIU PRINCIPAL
@@ -157,13 +230,27 @@ public class MainActivity extends Activity {
                 "Lungime: 16,50 m\n" +
                 "Greutate: 40 tone"));
 
-        addButton("VOCE ROMANA", () ->
-            showMessage("VOCE ROMANA",
-                "Ghidarea vocala va fi adaugata intr-o etapa urmatoare."));
+        addButton("VOCE ROMANA", () -> {
+
+            if (voiceReady) {
+                if (voice != null) {
+                    voice.speak(
+                        "Bun venit la GPS Alex Truck Navi.",
+                        TextToSpeech.QUEUE_FLUSH,
+                        null,
+                        "TEST_VOICE"
+                    );
+                }
+            } else {
+                showMessage("VOCE ROMANA",
+                    "Vocea romana nu este disponibila. " +
+                    "Verifica instalarea limbii romane in setarile Android.");
+            }
+        });
 
         addButton("DESPRE APLICATIE", () ->
             showMessage("GPS ALEX",
-                "GPS ALEX TRUCK NAVI\nVersiunea 1.0"));
+                "GPS ALEX TRUCK NAVI\nVersiunea 1.1"));
 
         TextView searchTitle = new TextView(this);
         searchTitle.setText("CAUTARE LOCATII");
@@ -297,12 +384,20 @@ public class MainActivity extends Activity {
 
                     addTruckMarker(lat, lon);
 
+                    if (destinationSelected) {
+                        addDestinationMarker();
+                    }
+
                     map.addOnMapClickListener(point -> {
                         setDestination(
                             point.getLatitude(),
                             point.getLongitude());
                         return true;
                     });
+
+                    if (routePoints.size() > 1) {
+                        drawRoute();
+                    }
                 });
         });
     }
@@ -326,9 +421,27 @@ public class MainActivity extends Activity {
         if (map == null || latitude == 0 || longitude == 0) return;
 
         addTruckMarker(latitude, longitude);
+
+        if (navigationActive) {
+            updateNavigation();
+        }
     }
 
     // DESTINATIE
+
+    private void addDestinationMarker() {
+
+        if (map == null || !destinationSelected) return;
+
+        if (destinationMarker != null) {
+            map.removeMarker(destinationMarker);
+        }
+
+        destinationMarker = map.addMarker(
+            new MarkerOptions()
+                .position(new LatLng(destinationLat, destinationLon))
+                .title("DESTINATIE"));
+    }
 
     private void setDestination(double lat, double lon) {
 
@@ -336,16 +449,22 @@ public class MainActivity extends Activity {
         destinationLon = lon;
         destinationSelected = true;
 
+        navigationActive = false;
+        stopVoice();
+
+        routePoints.clear();
+        routeManeuvers.clear();
+        nextManeuver = 0;
+        offRouteCount = 0;
+
         if (map != null) {
 
-            if (destinationMarker != null) {
-                map.removeMarker(destinationMarker);
+            if (routeLine != null) {
+                map.removePolyline(routeLine);
+                routeLine = null;
             }
 
-            destinationMarker = map.addMarker(
-                new MarkerOptions()
-                    .position(new LatLng(lat, lon))
-                    .title("DESTINATIE"));
+            addDestinationMarker();
 
             map.setCameraPosition(
                 new CameraPosition.Builder()
@@ -385,8 +504,8 @@ public class MainActivity extends Activity {
             "Latime: 2,55 m\n" +
             "Lungime: 16,50 m\n" +
             "Greutate: 40 tone\n\n" +
-            "Datele hartilor si restrictiile pot fi incomplete. " +
-            "Verifica traseul si indicatoarele rutiere.";
+            "Restrictiile hartilor pot fi incomplete. " +
+            "Verifica indicatoarele si traseul.";
 
         new AlertDialog.Builder(this)
             .setTitle("CONFIRMA PROFILUL CAMIONULUI")
@@ -415,10 +534,17 @@ public class MainActivity extends Activity {
             return;
         }
 
+        if (isCalculatingRoute) return;
+
+        final boolean wasNavigating = navigationActive;
+
         final double startLat = latitude;
         final double startLon = longitude;
         final double endLat = destinationLat;
         final double endLon = destinationLon;
+
+        isCalculatingRoute = true;
+        lastRecalculation = System.currentTimeMillis();
 
         Toast.makeText(this,
             "Se calculeaza traseul...",
@@ -499,8 +625,7 @@ public class MainActivity extends Activity {
                 reader.close();
 
                 if (responseCode != 200) {
-                    throw new Exception(
-                        "Server HTTP " + responseCode);
+                    throw new Exception("Server HTTP " + responseCode);
                 }
 
                 JSONObject result =
@@ -526,13 +651,14 @@ public class MainActivity extends Activity {
                 JSONArray maneuvers =
                     leg.optJSONArray("maneuvers");
 
+                ArrayList<RouteManeuver> newManeuvers =
+                    new ArrayList<>();
+
                 StringBuilder instructions = new StringBuilder();
 
                 if (maneuvers != null) {
 
-                    for (int i = 0;
-                         i < maneuvers.length() && i < 12;
-                         i++) {
+                    for (int i = 0; i < maneuvers.length(); i++) {
 
                         JSONObject maneuver =
                             maneuvers.getJSONObject(i);
@@ -540,7 +666,24 @@ public class MainActivity extends Activity {
                         String instruction =
                             maneuver.optString("instruction", "");
 
-                        if (!instruction.isEmpty()) {
+                        int shapeIndex =
+                            maneuver.optInt("begin_shape_index", 0);
+
+                        if (instruction.isEmpty()) continue;
+
+                        shapeIndex = Math.max(0,
+                            Math.min(shapeIndex, points.size() - 1));
+
+                        LatLng maneuverPoint = points.get(shapeIndex);
+
+                        newManeuvers.add(new RouteManeuver(
+                            shapeIndex,
+                            maneuverPoint.getLatitude(),
+                            maneuverPoint.getLongitude(),
+                            instruction
+                        ));
+
+                        if (instructions.length() < 3000) {
                             instructions.append(i + 1)
                                 .append(". ")
                                 .append(instruction)
@@ -551,54 +694,77 @@ public class MainActivity extends Activity {
 
                 final double finalDistance = distance;
                 final double finalSeconds = seconds;
-                final String finalInstructions =
-                    instructions.toString();
 
                 runOnUiThread(() -> {
 
+                    isCalculatingRoute = false;
+
                     if (map == null) return;
 
-                    if (routeLine != null) {
-                        map.removePolyline(routeLine);
+                    routePoints = points;
+                    routeManeuvers = newManeuvers;
+                    nextManeuver = 0;
+                    offRouteCount = 0;
+
+                    drawRoute();
+
+                    if (wasNavigating) {
+
+                        navigationActive = true;
+
+                        speak("Traseul a fost recalculat. " +
+                            "Continua deplasarea cu atentie.");
+
+                        Toast.makeText(this,
+                            "Traseul a fost recalculat.",
+                            Toast.LENGTH_LONG).show();
+
+                    } else {
+
+                        navigationActive = false;
+
+                        String message =
+                            "DISTANTA: " +
+                            String.format(Locale.US, "%.1f",
+                                finalDistance) +
+                            " km\n\n" +
+                            "DURATA ESTIMATA: " +
+                            (long) (finalSeconds / 60) +
+                            " minute\n\n" +
+                            "INDICATII RUTIERE:\n\n" +
+                            (instructions.length() == 0
+                                ? "Nu sunt disponibile indicatii."
+                                : instructions.toString()) +
+                            "\nATENTIE: Verifica separat toate " +
+                            "restrictiile pentru camioane.";
+
+                        new AlertDialog.Builder(this)
+                            .setTitle("TRASEU CALCULAT")
+                            .setMessage(message)
+                            .setPositiveButton("PORNESTE NAVIGAREA",
+                                (dialog, which) ->
+                                    startNavigation())
+                            .setNegativeButton("INCHIDE", null)
+                            .show();
                     }
-
-                    routeLine = map.addPolyline(
-                        new PolylineOptions()
-                            .addAll(points)
-                            .color(Color.BLUE)
-                            .width(6));
-
-                    map.setCameraPosition(
-                        new CameraPosition.Builder()
-                            .target(new LatLng(startLat, startLon))
-                            .zoom(10)
-                            .build());
-
-                    String message =
-                        "DISTANTA: " +
-                        String.format(Locale.US, "%.1f", finalDistance) +
-                        " km\n\n" +
-                        "DURATA ESTIMATA: " +
-                        (long) (finalSeconds / 60) +
-                        " minute\n\n" +
-                        "INDICATII RUTIERE:\n\n" +
-                        (finalInstructions.isEmpty()
-                            ? "Nu sunt disponibile indicatii."
-                            : finalInstructions) +
-                        "\nATENTIE: Verifica separat toate restrictiile " +
-                        "de inaltime, latime, lungime si greutate. " +
-                        "Traseul nu este o garantie de siguranta.";
-
-                    showMessage("TRASEU CALCULAT", message);
                 });
 
             } catch (Exception e) {
 
-                runOnUiThread(() ->
+                runOnUiThread(() -> {
+
+                    isCalculatingRoute = false;
+
                     Toast.makeText(this,
                         "Eroare la calcularea traseului: " +
                         e.getMessage(),
-                        Toast.LENGTH_LONG).show());
+                        Toast.LENGTH_LONG).show();
+
+                    if (wasNavigating) {
+                        speak("Nu am putut recalcula traseul. " +
+                            "Verifica conexiunea la internet.");
+                    }
+                });
 
             } finally {
 
@@ -609,6 +775,203 @@ public class MainActivity extends Activity {
 
         }).start();
     }
+
+    private void drawRoute() {
+
+        if (map == null || routePoints.size() < 2) return;
+
+        if (routeLine != null) {
+            map.removePolyline(routeLine);
+        }
+
+        routeLine = map.addPolyline(
+            new PolylineOptions()
+                .addAll(routePoints)
+                .color(Color.BLUE)
+                .width(6));
+
+        map.setCameraPosition(
+            new CameraPosition.Builder()
+                .target(new LatLng(latitude, longitude))
+                .zoom(12)
+                .build());
+    }
+
+    // PORNIRE NAVIGARE
+
+    private void startNavigation() {
+
+        if (routePoints.size() < 2) {
+            Toast.makeText(this,
+                "Calculeaza mai intai traseul.",
+                Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        navigationActive = true;
+        nextManeuver = 0;
+        offRouteCount = 0;
+
+        for (RouteManeuver maneuver : routeManeuvers) {
+            maneuver.announced = false;
+        }
+
+        speak("Navigarea GPS Alex a inceput. " +
+            "Condu cu atentie si respecta indicatoarele.");
+
+        Toast.makeText(this,
+            "NAVIGAREA A INCEPUT",
+            Toast.LENGTH_LONG).show();
+
+        updateNavigation();
+    }
+
+    private String formatDistance(float meters) {
+
+        if (meters >= 1000) {
+            return String.format(Locale.US,
+                "%.1f kilometri", meters / 1000f);
+        }
+
+        return Math.max(0, (int) meters) + " metri";
+    }
+
+    // URMARIRE TRASEU SI GHIDARE VOCALA
+
+    private void updateNavigation() {
+
+        if (!navigationActive ||
+            routePoints.size() < 2 ||
+            latitude == 0 || longitude == 0) {
+            return;
+        }
+
+        int nearestIndex = 0;
+        float nearestDistance = Float.MAX_VALUE;
+
+        float[] distance = new float[1];
+
+        for (int i = 0; i < routePoints.size(); i++) {
+
+            LatLng point = routePoints.get(i);
+
+            Location.distanceBetween(
+                latitude, longitude,
+                point.getLatitude(),
+                point.getLongitude(),
+                distance);
+
+            if (distance[0] < nearestDistance) {
+                nearestDistance = distance[0];
+                nearestIndex = i;
+            }
+        }
+
+        // DISTANTA RAMASA
+
+        float remaining = 0;
+
+        Location.distanceBetween(
+            latitude, longitude,
+            routePoints.get(nearestIndex).getLatitude(),
+            routePoints.get(nearestIndex).getLongitude(),
+            distance);
+
+        remaining += distance[0];
+
+        for (int i = nearestIndex; i < routePoints.size() - 1; i++) {
+
+            LatLng a = routePoints.get(i);
+            LatLng b = routePoints.get(i + 1);
+
+            Location.distanceBetween(
+                a.getLatitude(), a.getLongitude(),
+                b.getLatitude(), b.getLongitude(),
+                distance);
+
+            remaining += distance[0];
+        }
+
+        if (remaining < 80) {
+
+            navigationActive = false;
+
+            speak("Ai ajuns la destinatie.");
+
+            showMessage("AI AJUNS",
+                "Ai ajuns la destinatie.");
+
+            return;
+        }
+
+        // MANEVRE SI ANUNTURI VOCALE
+
+        while (nextManeuver < routeManeuvers.size()) {
+
+            RouteManeuver maneuver =
+                routeManeuvers.get(nextManeuver);
+
+            Location.distanceBetween(
+                latitude, longitude,
+                maneuver.lat, maneuver.lon,
+                distance);
+
+            float maneuverDistance = distance[0];
+
+            if (nearestIndex > maneuver.shapeIndex + 2) {
+                nextManeuver++;
+                continue;
+            }
+
+            if (!maneuver.announced && maneuverDistance <= 600) {
+
+                maneuver.announced = true;
+
+                speak("In " + formatDistance(maneuverDistance) +
+                    ", " + maneuver.instruction);
+            }
+
+            if (maneuverDistance <= 45 &&
+                maneuver.announced) {
+                nextManeuver++;
+                continue;
+            }
+
+            break;
+        }
+
+        // IESIRE DE PE TRASEU
+
+        if (nearestDistance > 120) {
+
+            offRouteCount++;
+
+            if (offRouteCount >= 3 &&
+                !isCalculatingRoute &&
+                System.currentTimeMillis() - lastRecalculation
+                    > 60000) {
+
+                speak("Ai iesit de pe traseu. " +
+                    "Incerc sa recalculez ruta.");
+
+                offRouteCount = 0;
+
+                requestTruckRoute();
+            }
+
+        } else {
+            offRouteCount = 0;
+        }
+
+        if (status != null) {
+            status.setText(
+                "NAVIGARE ACTIVA\n" +
+                "DISTANTA RAMASA: " +
+                formatDistance(remaining));
+        }
+    }
+
+    // DECODARE POLYLINE6
 
     private ArrayList<LatLng> decodePolyline6(String encoded) {
 
@@ -744,8 +1107,7 @@ public class MainActivity extends Activity {
 
                     } else if (item.has("center")) {
 
-                        JSONObject center =
-                            item.getJSONObject("center");
+                        JSONObject center = item.getJSONObject("center");
 
                         lat = center.getDouble("lat");
                         lon = center.getDouble("lon");
@@ -817,7 +1179,7 @@ public class MainActivity extends Activity {
 
             connection.setRequestProperty(
                 "User-Agent",
-                "GPS-ALEX-TRUCK-NAVI/1.0");
+                "GPS-ALEX-TRUCK-NAVI/1.1");
 
             String data = "data=" +
                 URLEncoder.encode(query, "UTF-8");
@@ -855,7 +1217,9 @@ public class MainActivity extends Activity {
     private void showPlaces(ArrayList<Place> places, String category) {
 
         if (places.isEmpty()) {
-            status.setText("Nu au fost gasite locatii in 25 km.");
+            if (status != null) {
+                status.setText("Nu au fost gasite locatii in 25 km.");
+            }
             return;
         }
 
@@ -870,7 +1234,9 @@ public class MainActivity extends Activity {
                     p.distance / 1000f);
         }
 
-        status.setText("Au fost gasite " + places.size() + " locatii.");
+        if (status != null) {
+            status.setText("Au fost gasite " + places.size() + " locatii.");
+        }
 
         String title = category.equals("parking")
             ? "PARCARI"
@@ -899,6 +1265,10 @@ public class MainActivity extends Activity {
         destinationSelected = false;
         destinationLat = 0;
         destinationLon = 0;
+
+        navigationActive = false;
+        routePoints.clear();
+        routeManeuvers.clear();
 
         LinearLayout screen = new LinearLayout(this);
         screen.setOrientation(LinearLayout.VERTICAL);
@@ -962,7 +1332,7 @@ public class MainActivity extends Activity {
         initializeMap();
     }
 
-    // CAUTARE ADRESA - FEREASTRA SEPARATA
+    // CAUTARE ADRESA
 
     private void searchAddress() {
 
@@ -1027,7 +1397,7 @@ public class MainActivity extends Activity {
 
                 connection.setRequestProperty(
                     "User-Agent",
-                    "GPS-ALEX-TRUCK-NAVI/1.0");
+                    "GPS-ALEX-TRUCK-NAVI/1.1");
 
                 BufferedReader reader = new BufferedReader(
                     new InputStreamReader(connection.getInputStream()));
@@ -1072,7 +1442,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // CAUTARE COORDONATE - FEREASTRA SEPARATA
+    // CAUTARE COORDONATE
 
     private void searchCoordinates() {
 
@@ -1138,7 +1508,7 @@ public class MainActivity extends Activity {
                     } catch (Exception e) {
 
                         Toast.makeText(this,
-                            "Coordonate invalide. Verifica valorile introduse.",
+                            "Coordonate invalide. Verifica valorile.",
                             Toast.LENGTH_LONG).show();
                     }
                 });
@@ -1266,6 +1636,9 @@ public class MainActivity extends Activity {
 
     private void returnHome() {
 
+        navigationActive = false;
+        stopVoice();
+
         destroyCurrentMap();
         mapOpened = false;
         showHome();
@@ -1312,6 +1685,12 @@ public class MainActivity extends Activity {
 
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
+        }
+
+        if (voice != null) {
+            voice.stop();
+            voice.shutdown();
+            voice = null;
         }
     }
 
