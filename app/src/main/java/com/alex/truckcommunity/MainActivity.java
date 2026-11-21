@@ -28,9 +28,17 @@ import org.maplibre.android.maps.MapView;
 import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.Style;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.net.URLEncoder;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,7 +51,11 @@ public class MainActivity extends Activity {
 
     private Marker truckMarker;
     private Marker destinationMarker;
+
     private Location lastLocation;
+
+    private final ArrayList<Marker> poiMarkers =
+            new ArrayList<>();
 
     private final ExecutorService executor =
             Executors.newSingleThreadExecutor();
@@ -68,6 +80,7 @@ public class MainActivity extends Activity {
     }
 
     private void showHome() {
+
         ScrollView scroll = new ScrollView(this);
 
         home = new LinearLayout(this);
@@ -98,6 +111,7 @@ public class MainActivity extends Activity {
     }
 
     private void addPanel(String title, String message) {
+
         TextView panel = new TextView(this);
 
         panel.setText(title);
@@ -113,6 +127,7 @@ public class MainActivity extends Activity {
         home.addView(panel, params);
 
         panel.setOnClickListener(v -> {
+
             if (title.equals("HARTA GPS")) {
                 showMap();
             } else {
@@ -126,6 +141,7 @@ public class MainActivity extends Activity {
     }
 
     private void showMap() {
+
         LinearLayout screen = new LinearLayout(this);
         screen.setOrientation(LinearLayout.VERTICAL);
 
@@ -137,7 +153,7 @@ public class MainActivity extends Activity {
         back.setBackgroundColor(Color.rgb(25, 105, 190));
 
         screen.addView(back,
-                new LinearLayout.LayoutParams(-1, 55));
+                new LinearLayout.LayoutParams(-1, 50));
 
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -163,6 +179,29 @@ public class MainActivity extends Activity {
 
         screen.addView(searchRow);
 
+        LinearLayout poiRow = new LinearLayout(this);
+        poiRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button parkingButton = new Button(this);
+        parkingButton.setText("PARCARI");
+
+        Button fuelButton = new Button(this);
+        fuelButton.setText("MOTORINA");
+
+        Button serviceButton = new Button(this);
+        serviceButton.setText("SERVICE");
+
+        poiRow.addView(parkingButton,
+                new LinearLayout.LayoutParams(0, 55, 1));
+
+        poiRow.addView(fuelButton,
+                new LinearLayout.LayoutParams(0, 55, 1));
+
+        poiRow.addView(serviceButton,
+                new LinearLayout.LayoutParams(0, 55, 1));
+
+        screen.addView(poiRow);
+
         mapView = new MapView(this);
         mapView.onCreate(null);
 
@@ -175,6 +214,7 @@ public class MainActivity extends Activity {
         mapView.onResume();
 
         mapView.getMapAsync(mapLibreMap -> {
+
             map = mapLibreMap;
 
             map.setStyle(
@@ -182,6 +222,7 @@ public class MainActivity extends Activity {
                             "https://tiles.openfreemap.org/styles/liberty"
                     ),
                     style -> {
+
                         map.getUiSettings()
                                 .setCompassEnabled(true);
 
@@ -200,6 +241,7 @@ public class MainActivity extends Activity {
         });
 
         searchButton.setOnClickListener(v -> {
+
             String query = searchInput.getText()
                     .toString().trim();
 
@@ -212,14 +254,18 @@ public class MainActivity extends Activity {
             searchButton.setText("CAUT...");
 
             executor.execute(() -> {
+
                 LatLng foundPoint = null;
                 String error = null;
 
                 try {
+
                     String[] parts = query.split("[,;\\s]+");
 
                     if (parts.length == 2) {
+
                         try {
+
                             double lat =
                                     Double.parseDouble(parts[0]);
 
@@ -228,7 +274,9 @@ public class MainActivity extends Activity {
 
                             if (lat >= -90 && lat <= 90
                                     && lon >= -180 && lon <= 180) {
+
                                 foundPoint = new LatLng(lat, lon);
+
                             } else {
                                 error = "Coordonate in afara limitelor.";
                             }
@@ -239,6 +287,7 @@ public class MainActivity extends Activity {
                     }
 
                     if (foundPoint == null && error == null) {
+
                         Geocoder geocoder =
                                 new Geocoder(this, Locale.getDefault());
 
@@ -246,12 +295,14 @@ public class MainActivity extends Activity {
                                 geocoder.getFromLocationName(query, 1);
 
                         if (results != null && !results.isEmpty()) {
+
                             Address address = results.get(0);
 
                             foundPoint = new LatLng(
                                     address.getLatitude(),
                                     address.getLongitude()
                             );
+
                         } else {
                             error = "Destinatia nu a fost gasita.";
                         }
@@ -267,6 +318,7 @@ public class MainActivity extends Activity {
                 final String resultError = error;
 
                 runOnUiThread(() -> {
+
                     searchButton.setEnabled(true);
                     searchButton.setText("CAUTA");
 
@@ -302,6 +354,15 @@ public class MainActivity extends Activity {
             });
         });
 
+        parkingButton.setOnClickListener(v ->
+                loadPlaces("parking"));
+
+        fuelButton.setOnClickListener(v ->
+                loadPlaces("fuel"));
+
+        serviceButton.setOnClickListener(v ->
+                loadPlaces("service"));
+
         back.setOnClickListener(v -> {
             stopGps();
             destroyMap();
@@ -315,6 +376,7 @@ public class MainActivity extends Activity {
             startGps();
 
         } else {
+
             requestPermissions(
                     new String[]{
                             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -326,6 +388,7 @@ public class MainActivity extends Activity {
     }
 
     private void updateTruckPosition(Location location) {
+
         if (map == null || mapView == null) {
             return;
         }
@@ -336,12 +399,15 @@ public class MainActivity extends Activity {
         );
 
         if (truckMarker == null) {
+
             truckMarker = map.addMarker(
                     new MarkerOptions()
                             .position(point)
                             .title("Camionul meu")
             );
+
         } else {
+
             truckMarker.setPosition(point);
             map.updateMarker(truckMarker);
         }
@@ -355,7 +421,253 @@ public class MainActivity extends Activity {
         );
     }
 
+    private void loadPlaces(String category) {
+
+        if (map == null) {
+            showMessage("Harta nu este pregatita.");
+            return;
+        }
+
+        LatLng center;
+
+        if (lastLocation != null) {
+
+            center = new LatLng(
+                    lastLocation.getLatitude(),
+                    lastLocation.getLongitude()
+            );
+
+        } else {
+            center = map.getCameraPosition().target;
+        }
+
+        if (center == null) {
+            showMessage("Nu am gasit pozitia.");
+            return;
+        }
+
+        final double lat = center.getLatitude();
+        final double lon = center.getLongitude();
+
+        showMessage("Cautam locurile din apropiere...");
+
+        executor.execute(() -> {
+
+            ArrayList<Place> places = new ArrayList<>();
+
+            HttpURLConnection connection = null;
+
+            try {
+
+                String filters = "";
+
+                if (category.equals("parking")) {
+
+                    filters =
+                            "nwr(around:5000," + lat + "," + lon +
+                            ")[amenity=parking];";
+
+                } else if (category.equals("fuel")) {
+
+                    filters =
+                            "nwr(around:5000," + lat + "," + lon +
+                            ")[amenity=fuel];";
+
+                } else if (category.equals("service")) {
+
+                    filters =
+                            "nwr(around:5000," + lat + "," + lon +
+                            ")[shop=truck];" +
+                            "nwr(around:5000," + lat + "," + lon +
+                            ")[craft=car_repair];";
+                }
+
+                String query =
+                        "[out:json][timeout:25];(" +
+                        filters +
+                        ");out center;";
+
+                URL url = new URL(
+                        "https://overpass-api.de/api/interpreter"
+                );
+
+                connection =
+                        (HttpURLConnection) url.openConnection();
+
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty(
+                        "Content-Type",
+                        "application/x-www-form-urlencoded"
+                );
+
+                String data = "data=" +
+                        URLEncoder.encode(query, "UTF-8");
+
+                try (OutputStream output =
+                             connection.getOutputStream()) {
+
+                    output.write(data.getBytes("UTF-8"));
+                }
+
+                if (connection.getResponseCode() != 200) {
+                    throw new IOException("Server error");
+                }
+
+                java.io.InputStream input =
+                        connection.getInputStream();
+
+                java.io.ByteArrayOutputStream buffer =
+                        new java.io.ByteArrayOutputStream();
+
+                byte[] bytes = new byte[4096];
+                int count;
+
+                while ((count = input.read(bytes)) != -1) {
+                    buffer.write(bytes, 0, count);
+                }
+
+                input.close();
+
+                JSONObject response = new JSONObject(
+                        buffer.toString("UTF-8")
+                );
+
+                JSONArray elements =
+                        response.getJSONArray("elements");
+
+                for (int i = 0; i < elements.length(); i++) {
+
+                    JSONObject element =
+                            elements.getJSONObject(i);
+
+                    double placeLat;
+                    double placeLon;
+
+                    if (element.has("lat")) {
+
+                        placeLat = element.getDouble("lat");
+                        placeLon = element.getDouble("lon");
+
+                    } else if (element.has("center")) {
+
+                        JSONObject centerObject =
+                                element.getJSONObject("center");
+
+                        placeLat =
+                                centerObject.getDouble("lat");
+
+                        placeLon =
+                                centerObject.getDouble("lon");
+
+                    } else {
+                        continue;
+                    }
+
+                    String name = "Locatie fara nume";
+
+                    if (element.has("tags")) {
+
+                        JSONObject tags =
+                                element.getJSONObject("tags");
+
+                        if (tags.has("name")) {
+                            name = tags.getString("name");
+                        }
+                    }
+
+                    String symbol = "Punct de interes";
+
+                    if (category.equals("parking")) {
+                        symbol = "Parcare";
+                    } else if (category.equals("fuel")) {
+                        symbol = "Benzinarie";
+                    } else if (category.equals("service")) {
+                        symbol = "Service";
+                    }
+
+                    places.add(new Place(
+                            placeLat,
+                            placeLon,
+                            name,
+                            symbol
+                    ));
+                }
+
+            } catch (Exception e) {
+
+                runOnUiThread(() ->
+                        showMessage(
+                                "Nu am putut incarca locurile. Verifica internetul si incearca din nou."
+                        )
+                );
+
+                return;
+
+            } finally {
+
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+
+            runOnUiThread(() -> showPlaces(places));
+        });
+    }
+
+    private static class Place {
+
+        double lat;
+        double lon;
+        String name;
+        String type;
+
+        Place(double lat, double lon, String name, String type) {
+            this.lat = lat;
+            this.lon = lon;
+            this.name = name;
+            this.type = type;
+        }
+    }
+
+    private void showPlaces(ArrayList<Place> places) {
+
+        if (map == null) {
+            return;
+        }
+
+        for (Marker marker : poiMarkers) {
+            map.removeMarker(marker);
+        }
+
+        poiMarkers.clear();
+
+        for (Place place : places) {
+
+            String title = place.type + ": " + place.name;
+
+            Marker marker = map.addMarker(
+                    new MarkerOptions()
+                            .position(new LatLng(
+                                    place.lat,
+                                    place.lon
+                            ))
+                            .title(title)
+            );
+
+            poiMarkers.add(marker);
+        }
+
+        showMessage(
+                "Am gasit " + places.size() +
+                " locuri in apropiere."
+        );
+    }
+
     private void showMessage(String message) {
+
         new AlertDialog.Builder(this)
                 .setMessage(message)
                 .setPositiveButton("OK", null)
@@ -363,7 +675,9 @@ public class MainActivity extends Activity {
     }
 
     private void startGps() {
+
         try {
+
             locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
                     2000,
@@ -381,18 +695,22 @@ public class MainActivity extends Activity {
             }
 
         } catch (SecurityException e) {
+
             showMessage("Permisiunea GPS nu este activata.");
         }
     }
 
     private void stopGps() {
+
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
         }
     }
 
     private void destroyMap() {
+
         if (mapView != null) {
+
             mapView.onPause();
             mapView.onStop();
             mapView.onDestroy();
@@ -402,6 +720,7 @@ public class MainActivity extends Activity {
         map = null;
         truckMarker = null;
         destinationMarker = null;
+        poiMarkers.clear();
     }
 
     @Override
@@ -414,11 +733,15 @@ public class MainActivity extends Activity {
                 requestCode, permissions, grantResults);
 
         if (requestCode == GPS_PERMISSION) {
+
             if (grantResults.length > 0
                     && grantResults[0]
                     == PackageManager.PERMISSION_GRANTED) {
+
                 startGps();
+
             } else {
+
                 showMessage(
                         "Fara permisiunea GPS, pozitia nu poate fi afisata."
                 );
