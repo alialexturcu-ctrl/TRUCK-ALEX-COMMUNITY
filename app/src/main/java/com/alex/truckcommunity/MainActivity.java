@@ -7,39 +7,63 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.Marker;
+import org.osmdroid.views.overlay.Polyline;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class MainActivity extends Activity implements LocationListener {
+public class MainActivity extends Activity {
 
     private MapView map;
     private LocationManager locationManager;
-    private TextToSpeech tts;
     private TextView status;
-    private Marker truckMarker;
+    private EditText startInput;
+    private EditText destinationInput;
 
+    private TextToSpeech tts;
     private boolean voiceReady = false;
+
+    private Marker startMarker;
+    private Marker destinationMarker;
+    private Polyline routeLine;
+
+    private final ExecutorService executor =
+            Executors.newSingleThreadExecutor();
+
+    private final Handler handler =
+            new Handler(Looper.getMainLooper());
 
     private static final int LOCATION_PERMISSION = 100;
 
-    private final GeoPoint defaultPosition =
-            new GeoPoint(45.0, 10.0);
+    private GeoPoint currentPosition;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,10 +96,34 @@ public class MainActivity extends Activity implements LocationListener {
         title.setTextColor(Color.WHITE);
         title.setTextSize(20);
         title.setGravity(Gravity.CENTER);
-        title.setPadding(8, 15, 8, 15);
+        title.setPadding(8, 14, 8, 14);
         title.setBackgroundColor(Color.rgb(23, 43, 58));
 
         root.addView(title);
+
+        startInput = new EditText(this);
+        startInput.setSingleLine(true);
+        startInput.setTextColor(Color.WHITE);
+        startInput.setHintTextColor(Color.LTGRAY);
+        startInput.setHint("Plecare (gol = poziția GPS)");
+        startInput.setPadding(12, 8, 12, 8);
+
+        root.addView(startInput);
+
+        destinationInput = new EditText(this);
+        destinationInput.setSingleLine(true);
+        destinationInput.setTextColor(Color.WHITE);
+        destinationInput.setHintTextColor(Color.LTGRAY);
+        destinationInput.setHint("Destinație: ex. Roma, Italia");
+        destinationInput.setPadding(12, 8, 12, 8);
+
+        root.addView(destinationInput);
+
+        Button routeButton = new Button(this);
+        routeButton.setText("CALCULEAZĂ TRASEUL");
+        routeButton.setOnClickListener(v -> calculateRoute());
+
+        root.addView(routeButton);
 
         status = new TextView(this);
         status.setText("Se pregătește harta...");
@@ -86,7 +134,6 @@ public class MainActivity extends Activity implements LocationListener {
 
         root.addView(status);
 
-        // HARTA
         map = new MapView(this);
         map.setTileSource(TileSourceFactory.MAPNIK);
         map.setMultiTouchControls(true);
@@ -96,7 +143,7 @@ public class MainActivity extends Activity implements LocationListener {
         map.setMaxZoomLevel(19.0);
 
         map.getController().setZoom(5.0);
-        map.getController().setCenter(defaultPosition);
+        map.getController().setCenter(new GeoPoint(45.0, 10.0));
 
         LinearLayout.LayoutParams mapParams =
                 new LinearLayout.LayoutParams(
@@ -107,52 +154,39 @@ public class MainActivity extends Activity implements LocationListener {
 
         root.addView(map, mapParams);
 
-        // RANDUL CU BUTOANELE GPS SI ZOOM
         LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
         buttons.setGravity(Gravity.CENTER);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button positionButton = new Button(this);
-        positionButton.setText("POZIȚIA MEA");
-        positionButton.setTextSize(12);
-        positionButton.setOnClickListener(v -> {
+        Button gpsButton = new Button(this);
+        gpsButton.setText("POZIȚIA MEA");
+        gpsButton.setOnClickListener(v -> {
             checkLocationPermission();
             goToMyLocation();
         });
 
-        Button zoomInButton = new Button(this);
-        zoomInButton.setText("+");
-        zoomInButton.setTextSize(20);
-        zoomInButton.setOnClickListener(v -> {
-            if (map != null) {
-                map.getController().zoomIn();
-            }
-        });
+        Button zoomIn = new Button(this);
+        zoomIn.setText("+");
+        zoomIn.setOnClickListener(v -> map.getController().zoomIn());
 
-        Button zoomOutButton = new Button(this);
-        zoomOutButton.setText("−");
-        zoomOutButton.setTextSize(20);
-        zoomOutButton.setOnClickListener(v -> {
-            if (map != null) {
-                map.getController().zoomOut();
-            }
-        });
+        Button zoomOut = new Button(this);
+        zoomOut.setText("−");
+        zoomOut.setOnClickListener(v -> map.getController().zoomOut());
 
-        buttons.addView(positionButton,
+        buttons.addView(gpsButton,
                 new LinearLayout.LayoutParams(0,
                         LinearLayout.LayoutParams.WRAP_CONTENT, 2));
 
-        buttons.addView(zoomInButton,
+        buttons.addView(zoomIn,
                 new LinearLayout.LayoutParams(0,
                         LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
-        buttons.addView(zoomOutButton,
+        buttons.addView(zoomOut,
                 new LinearLayout.LayoutParams(0,
                         LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
         root.addView(buttons);
 
-        // BUTON VOCE
         Button voiceButton = new Button(this);
         voiceButton.setText("TESTEAZĂ VOCEA");
         voiceButton.setOnClickListener(v ->
@@ -160,6 +194,14 @@ public class MainActivity extends Activity implements LocationListener {
         );
 
         root.addView(voiceButton);
+
+        TextView attribution = new TextView(this);
+        attribution.setText("Hartă © OpenStreetMap contributors");
+        attribution.setTextColor(Color.LTGRAY);
+        attribution.setTextSize(10);
+        attribution.setGravity(Gravity.CENTER);
+
+        root.addView(attribution);
 
         setContentView(root);
     }
@@ -176,12 +218,6 @@ public class MainActivity extends Activity implements LocationListener {
                 voiceReady =
                         languageResult != TextToSpeech.LANG_MISSING_DATA
                         && languageResult != TextToSpeech.LANG_NOT_SUPPORTED;
-
-                if (voiceReady) {
-                    status.setText("Harta este pregătită. Vocea română este activă.");
-                } else {
-                    status.setText("Vocea română nu este disponibilă.");
-                }
             }
         });
     }
@@ -195,12 +231,6 @@ public class MainActivity extends Activity implements LocationListener {
                     null,
                     "truck_voice"
             );
-        } else {
-            Toast.makeText(
-                    this,
-                    "Vocea nu este încă pregătită.",
-                    Toast.LENGTH_SHORT
-            ).show();
         }
     }
 
@@ -219,98 +249,338 @@ public class MainActivity extends Activity implements LocationListener {
             );
 
         } else {
-            startGPS();
+            getCurrentGPS();
         }
     }
 
-    private void startGPS() {
-
-        if (locationManager == null) {
-            status.setText("Serviciul GPS nu este disponibil.");
-            return;
-        }
+    private void getCurrentGPS() {
 
         try {
 
-            if (!locationManager.isProviderEnabled(
-                    LocationManager.GPS_PROVIDER)) {
-
-                status.setText("Activează GPS-ul telefonului.");
-                return;
-            }
-
-            locationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    3000,
-                    5,
-                    this
-            );
-
-            status.setText("GPS activ. Se caută poziția...");
-
-            Location lastLocation =
+            Location location =
                     locationManager.getLastKnownLocation(
                             LocationManager.GPS_PROVIDER
                     );
 
-            if (lastLocation != null) {
-                onLocationChanged(lastLocation);
+            if (location == null) {
+                location = locationManager.getLastKnownLocation(
+                        LocationManager.NETWORK_PROVIDER
+                );
+            }
+
+            if (location != null) {
+
+                currentPosition = new GeoPoint(
+                        location.getLatitude(),
+                        location.getLongitude()
+                );
+
+                updateGPSMarker(currentPosition);
+
             }
 
         } catch (SecurityException e) {
-            status.setText("Permisiunea GPS nu este acordată.");
+            status.setText("Permisiunea GPS nu este disponibilă.");
         } catch (Exception e) {
-            status.setText("Nu se poate porni GPS-ul.");
+            status.setText("Nu s-a putut obține poziția GPS.");
         }
     }
 
-    private void goToMyLocation() {
+    private void updateGPSMarker(GeoPoint point) {
 
-        if (truckMarker != null && map != null) {
-            map.getController().animateTo(
-                    truckMarker.getPosition()
-            );
-            map.getController().setZoom(16.0);
-        } else {
-            status.setText("Așteaptă detectarea poziției GPS.");
-        }
-    }
+        if (startMarker == null) {
 
-    @Override
-    public void onLocationChanged(Location location) {
-
-        double latitude = location.getLatitude();
-        double longitude = location.getLongitude();
-
-        GeoPoint position = new GeoPoint(latitude, longitude);
-
-        if (truckMarker == null) {
-
-            truckMarker = new Marker(map);
-            truckMarker.setTitle("Poziția GPS");
-            truckMarker.setAnchor(
+            startMarker = new Marker(map);
+            startMarker.setTitle("Poziția mea");
+            startMarker.setAnchor(
                     Marker.ANCHOR_CENTER,
                     Marker.ANCHOR_BOTTOM
             );
 
-            map.getOverlays().add(truckMarker);
+            map.getOverlays().add(startMarker);
         }
 
-        truckMarker.setPosition(position);
-
-        map.getController().setZoom(16.0);
-        map.getController().animateTo(position);
+        startMarker.setPosition(point);
         map.invalidate();
+    }
 
-        float speed = location.getSpeed() * 3.6f;
+    private void goToMyLocation() {
 
-        status.setText(
-                String.format(
-                        Locale.getDefault(),
-                        "GPS ACTIV | Viteză: %.1f km/h",
-                        speed
-                )
-        );
+        getCurrentGPS();
+
+        if (currentPosition != null) {
+            map.getController().animateTo(currentPosition);
+            map.getController().setZoom(16.0);
+        } else {
+            status.setText("Nu există încă o poziție GPS. Încearcă afară.");
+        }
+    }
+
+    private void calculateRoute() {
+
+        String start = startInput.getText().toString().trim();
+        String destination =
+                destinationInput.getText().toString().trim();
+
+        if (destination.isEmpty()) {
+            Toast.makeText(
+                    this,
+                    "Introdu destinația.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        if (start.isEmpty()) {
+            getCurrentGPS();
+
+            if (currentPosition == null) {
+                status.setText(
+                        "Nu avem poziție GPS. Introdu orașul de plecare."
+                );
+                return;
+            }
+        }
+
+        status.setText("Se caută orașele și se calculează traseul...");
+
+        executor.execute(() -> {
+
+            try {
+
+                GeoPoint origin;
+
+                if (start.isEmpty()) {
+                    origin = currentPosition;
+                } else {
+                    origin = searchCity(start);
+                }
+
+                // Pauză pentru respectarea limitei Nominatim.
+                if (!start.isEmpty()) {
+                    Thread.sleep(1100);
+                }
+
+                GeoPoint destinationPoint = searchCity(destination);
+
+                JSONObject route = getRoute(origin, destinationPoint);
+
+                handler.post(() -> showRoute(
+                        origin,
+                        destinationPoint,
+                        route
+                ));
+
+            } catch (Exception e) {
+
+                handler.post(() -> status.setText(
+                        "Eroare: " + e.getMessage()
+                ));
+            }
+        });
+    }
+
+    private GeoPoint searchCity(String city) throws Exception {
+
+        String encoded = URLEncoder.encode(city, "UTF-8");
+
+        String address =
+                "https://nominatim.openstreetmap.org/search"
+                + "?format=jsonv2&limit=1&q=" + encoded;
+
+        JSONObject unused = null;
+
+        JSONArray results = new JSONArray(httpGet(address));
+
+        if (results.length() == 0) {
+            throw new Exception("Orașul nu a fost găsit: " + city);
+        }
+
+        JSONObject item = results.getJSONObject(0);
+
+        double latitude = item.getDouble("lat");
+        double longitude = item.getDouble("lon");
+
+        return new GeoPoint(latitude, longitude);
+    }
+
+    private JSONObject getRoute(
+            GeoPoint origin,
+            GeoPoint destination) throws Exception {
+
+        String coordinates =
+                origin.getLongitude() + "," + origin.getLatitude()
+                + ";" +
+                destination.getLongitude() + ","
+                + destination.getLatitude();
+
+        String address =
+                "https://router.project-osrm.org/route/v1/driving/"
+                + coordinates
+                + "?overview=full&geometries=geojson&steps=true";
+
+        JSONObject response = new JSONObject(httpGet(address));
+
+        if (!"Ok".equals(response.optString("code"))) {
+            throw new Exception("Nu s-a găsit un traseu rutier.");
+        }
+
+        JSONArray routes = response.getJSONArray("routes");
+
+        if (routes.length() == 0) {
+            throw new Exception("Nu există traseu disponibil.");
+        }
+
+        return routes.getJSONObject(0);
+    }
+
+    private String httpGet(String address) throws Exception {
+
+        HttpURLConnection connection = null;
+
+        try {
+
+            URL url = new URL(address);
+
+            connection = (HttpURLConnection) url.openConnection();
+
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(20000);
+
+            connection.setRequestProperty(
+                    "User-Agent",
+                    "TRUCK-ALEX-COMMUNITY/1.0 (Android app)"
+            );
+
+            int responseCode = connection.getResponseCode();
+
+            if (responseCode != 200) {
+                throw new Exception(
+                        "Server indisponibil. Cod: " + responseCode
+                );
+            }
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(
+                            connection.getInputStream(),
+                            "UTF-8"
+                    )
+            );
+
+            StringBuilder result = new StringBuilder();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                result.append(line);
+            }
+
+            reader.close();
+
+            return result.toString();
+
+        } finally {
+
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private void showRoute(
+            GeoPoint origin,
+            GeoPoint destination,
+            JSONObject route) {
+
+        try {
+
+            JSONArray coordinates =
+                    route.getJSONObject("geometry")
+                            .getJSONArray("coordinates");
+
+            ArrayList<GeoPoint> points = new ArrayList<>();
+
+            for (int i = 0; i < coordinates.length(); i++) {
+
+                JSONArray coordinate = coordinates.getJSONArray(i);
+
+                double longitude = coordinate.getDouble(0);
+                double latitude = coordinate.getDouble(1);
+
+                points.add(new GeoPoint(latitude, longitude));
+            }
+
+            if (routeLine != null) {
+                map.getOverlays().remove(routeLine);
+            }
+
+            routeLine = new Polyline();
+            routeLine.setPoints(points);
+            routeLine.setColor(Color.rgb(0, 150, 255));
+            routeLine.setWidth(10f);
+
+            map.getOverlays().add(routeLine);
+
+            Marker destinationPin = new Marker(map);
+            destinationPin.setPosition(destination);
+            destinationPin.setTitle("Destinație");
+
+            if (destinationMarker != null) {
+                map.getOverlays().remove(destinationMarker);
+            }
+
+            destinationMarker = destinationPin;
+            map.getOverlays().add(destinationMarker);
+
+            if (startMarker != null) {
+                map.getOverlays().remove(startMarker);
+            }
+
+            startMarker = new Marker(map);
+            startMarker.setPosition(origin);
+            startMarker.setTitle("Plecare");
+
+            map.getOverlays().add(startMarker);
+
+            double distanceKm =
+                    route.getDouble("distance") / 1000.0;
+
+            double durationHours =
+                    route.getDouble("duration") / 3600.0;
+
+            int hours = (int) durationHours;
+            int minutes = (int) ((durationHours - hours) * 60);
+
+            String message = String.format(
+                    Locale.getDefault(),
+                    "TRASEU CALCULAT\nDistanță: %.1f km\nDurată estimată: %d h %d min",
+                    distanceKm,
+                    hours,
+                    minutes
+            );
+
+            status.setText(message);
+
+            map.zoomToBoundingBox(
+                    routeLine.getBounds(),
+                    true,
+                    60
+            );
+
+            map.invalidate();
+
+            speak("Traseul a fost calculat. "
+                    + String.format(
+                            Locale.getDefault(),
+                            "Distanța este de aproximativ %.0f kilometri.",
+                            distanceKm
+                    ));
+
+        } catch (Exception e) {
+
+            status.setText("Eroare la afișarea traseului.");
+        }
     }
 
     @Override
@@ -330,17 +600,16 @@ public class MainActivity extends Activity implements LocationListener {
             if (grantResults.length > 0 &&
                     grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
-                startGPS();
+                getCurrentGPS();
 
             } else {
-
                 status.setText("Permisiunea GPS nu a fost acordată.");
             }
         }
     }
 
     @Override
-    public void onResume() {
+    protected void onResume() {
         super.onResume();
 
         if (map != null) {
@@ -349,21 +618,19 @@ public class MainActivity extends Activity implements LocationListener {
     }
 
     @Override
-    public void onPause() {
+    protected void onPause() {
         super.onPause();
 
         if (map != null) {
             map.onPause();
         }
-
-        if (locationManager != null) {
-            locationManager.removeUpdates(this);
-        }
     }
 
     @Override
-    public void onDestroy() {
+    protected void onDestroy() {
         super.onDestroy();
+
+        executor.shutdownNow();
 
         if (tts != null) {
             tts.stop();
@@ -373,23 +640,5 @@ public class MainActivity extends Activity implements LocationListener {
         if (map != null) {
             map.onDetach();
         }
-    }
-
-    @Override
-    public void onProviderEnabled(String provider) {
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-        if (status != null) {
-            status.setText("Activează GPS-ul telefonului.");
-        }
-    }
-
-    @Override
-    public void onStatusChanged(
-            String provider,
-            int statusValue,
-            Bundle extras) {
     }
 }
