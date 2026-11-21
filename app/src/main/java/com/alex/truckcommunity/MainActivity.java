@@ -57,9 +57,6 @@ public class MainActivity extends Activity {
 
     private LocationManager locationManager;
 
-    private EditText addressInput;
-    private EditText coordinateInput;
-
     private double latitude = 0;
     private double longitude = 0;
 
@@ -913,26 +910,10 @@ public class MainActivity extends Activity {
         screen.addView(back,
             new LinearLayout.LayoutParams(-1, dp(45)));
 
-        addressInput = new EditText(this);
-        addressInput.setSingleLine(true);
-        addressInput.setTextSize(16);
-        addressInput.setHint("Cauta adresa sau localitatea...");
-
-        screen.addView(addressInput,
-            new LinearLayout.LayoutParams(-1, dp(50)));
-
         TextView addressButton = createActionButton("CAUTA ADRESA");
 
         screen.addView(addressButton,
             new LinearLayout.LayoutParams(-1, dp(42)));
-
-        coordinateInput = new EditText(this);
-        coordinateInput.setSingleLine(true);
-        coordinateInput.setTextSize(16);
-        coordinateInput.setHint("Coordonate: 45.4642, 9.1900");
-
-        screen.addView(coordinateInput,
-            new LinearLayout.LayoutParams(-1, dp(50)));
 
         TextView coordinateButton =
             createActionButton("CAUTA COORDONATE");
@@ -981,18 +962,47 @@ public class MainActivity extends Activity {
         initializeMap();
     }
 
-    // CAUTARE ADRESA
+    // CAUTARE ADRESA - FEREASTRA SEPARATA
 
     private void searchAddress() {
 
-        String address = addressInput.getText().toString().trim();
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setTextSize(16);
+        input.setHint("Ex: Via Roma, Padova, Italia");
 
-        if (address.isEmpty()) {
-            Toast.makeText(this,
-                "Introdu o adresa.",
-                Toast.LENGTH_SHORT).show();
-            return;
-        }
+        LinearLayout container = new LinearLayout(this);
+        container.setPadding(dp(20), dp(5), dp(20), dp(5));
+        container.addView(input);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("INTRODU ADRESA")
+            .setView(container)
+            .setPositiveButton("CAUTA", null)
+            .setNegativeButton("ANULEAZA", null)
+            .create();
+
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+
+                    String address =
+                        input.getText().toString().trim();
+
+                    if (address.isEmpty()) {
+                        input.setError("Introdu adresa.");
+                        return;
+                    }
+
+                    dialog.dismiss();
+                    findAddress(address);
+                });
+        });
+
+        dialog.show();
+    }
+
+    private void findAddress(String address) {
 
         Toast.makeText(this,
             "Se cauta adresa...",
@@ -1062,34 +1072,79 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // COORDONATE
+    // CAUTARE COORDONATE - FEREASTRA SEPARATA
 
     private void searchCoordinates() {
 
-        String value = coordinateInput.getText().toString().trim();
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        fields.setPadding(dp(20), dp(5), dp(20), dp(5));
 
-        try {
+        EditText latInput = new EditText(this);
+        latInput.setSingleLine(true);
+        latInput.setTextSize(16);
+        latInput.setHint("Latitudine (ex: 45.4642)");
+        latInput.setInputType(
+            android.text.InputType.TYPE_CLASS_NUMBER |
+            android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL |
+            android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
 
-            String[] parts = value.split("[,;\\s]+");
+        EditText lonInput = new EditText(this);
+        lonInput.setSingleLine(true);
+        lonInput.setTextSize(16);
+        lonInput.setHint("Longitudine (ex: 9.1900)");
+        lonInput.setInputType(
+            android.text.InputType.TYPE_CLASS_NUMBER |
+            android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL |
+            android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
 
-            if (parts.length != 2) throw new Exception();
+        fields.addView(latInput);
+        fields.addView(lonInput);
 
-            double lat = Double.parseDouble(parts[0]);
-            double lon = Double.parseDouble(parts[1]);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("INTRODU COORDONATELE")
+            .setView(fields)
+            .setPositiveButton("CAUTA", null)
+            .setNegativeButton("ANULEAZA", null)
+            .create();
 
-            if (lat < -90 || lat > 90 ||
-                lon < -180 || lon > 180) {
-                throw new Exception();
-            }
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
 
-            setDestination(lat, lon);
+                    try {
 
-        } catch (Exception e) {
+                        String latText = latInput.getText()
+                            .toString().trim().replace(",", ".");
 
-            Toast.makeText(this,
-                "Introdu: 45.4642, 9.1900",
-                Toast.LENGTH_LONG).show();
-        }
+                        String lonText = lonInput.getText()
+                            .toString().trim().replace(",", ".");
+
+                        if (latText.isEmpty() || lonText.isEmpty()) {
+                            throw new Exception();
+                        }
+
+                        double lat = Double.parseDouble(latText);
+                        double lon = Double.parseDouble(lonText);
+
+                        if (lat < -90 || lat > 90 ||
+                            lon < -180 || lon > 180) {
+                            throw new Exception();
+                        }
+
+                        dialog.dismiss();
+                        setDestination(lat, lon);
+
+                    } catch (Exception e) {
+
+                        Toast.makeText(this,
+                            "Coordonate invalide. Verifica valorile introduse.",
+                            Toast.LENGTH_LONG).show();
+                    }
+                });
+        });
+
+        dialog.show();
     }
 
     // GOOGLE MAPS PENTRU ORIENTARE
