@@ -41,6 +41,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
@@ -52,7 +53,7 @@ public class MainActivity extends Activity {
 
     private Marker truckMarker;
     private Marker destinationMarker;
-    private Polyline demoRoute;
+    private Polyline routeLine;
 
     private LocationManager locationManager;
 
@@ -69,8 +70,6 @@ public class MainActivity extends Activity {
     private boolean mapOpened = false;
 
     private static final int GPS_PERMISSION = 100;
-
-    private final int BLACK = Color.BLACK;
 
     private static final String[] OVERPASS_SERVERS = {
         "https://overpass.kumi.systems/api/interpreter",
@@ -110,7 +109,7 @@ public class MainActivity extends Activity {
         getGPS();
     }
 
-    // MENI PRINCIPAL
+    // MENIU PRINCIPAL
 
     private void showHome() {
 
@@ -135,7 +134,6 @@ public class MainActivity extends Activity {
         title.setTextSize(28);
         title.setGravity(Gravity.CENTER);
         title.setTypeface(null, Typeface.BOLD);
-        title.setPadding(0, dp(5), 0, dp(2));
         layout.addView(title);
 
         TextView subtitle = new TextView(this);
@@ -143,7 +141,6 @@ public class MainActivity extends Activity {
         subtitle.setTextColor(Color.DKGRAY);
         subtitle.setTextSize(14);
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, 0, 0, dp(5));
         layout.addView(subtitle);
 
         addButton("HARTA GPS", () -> showMap());
@@ -165,7 +162,7 @@ public class MainActivity extends Activity {
 
         addButton("VOCE ROMANA", () ->
             showMessage("VOCE ROMANA",
-                "Configurarea vocii romane va fi adaugata ulterior."));
+                "Ghidarea vocala va fi adaugata intr-o etapa urmatoare."));
 
         addButton("DESPRE APLICATIE", () ->
             showMessage("GPS ALEX",
@@ -177,7 +174,6 @@ public class MainActivity extends Activity {
         searchTitle.setTextSize(18);
         searchTitle.setTypeface(null, Typeface.BOLD);
         searchTitle.setGravity(Gravity.CENTER);
-        searchTitle.setPadding(0, dp(7), 0, dp(4));
         layout.addView(searchTitle);
 
         addButton("PARCARI TIR", () -> searchPlaces("parking"));
@@ -187,9 +183,7 @@ public class MainActivity extends Activity {
         status = new TextView(this);
         status.setText("GPS ALEX pregatit pentru navigare");
         status.setTextColor(Color.DKGRAY);
-        status.setTextSize(13);
         status.setGravity(Gravity.CENTER);
-        status.setPadding(0, dp(4), 0, dp(4));
         layout.addView(status);
 
         scroll.addView(layout);
@@ -199,7 +193,6 @@ public class MainActivity extends Activity {
 
         LinearLayout mapContainer = new LinearLayout(this);
         mapContainer.setOrientation(LinearLayout.VERTICAL);
-        mapContainer.setBackgroundColor(Color.WHITE);
 
         TextView mapTitle = new TextView(this);
         mapTitle.setText("HARTA GPS - POZITIA CAMIONULUI");
@@ -207,7 +200,6 @@ public class MainActivity extends Activity {
         mapTitle.setTextSize(16);
         mapTitle.setTypeface(null, Typeface.BOLD);
         mapTitle.setGravity(Gravity.CENTER);
-        mapTitle.setPadding(0, dp(5), 0, dp(5));
 
         mapContainer.addView(mapTitle,
             new LinearLayout.LayoutParams(-1, dp(35)));
@@ -237,13 +229,10 @@ public class MainActivity extends Activity {
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setClickable(true);
-        button.setFocusable(true);
 
         GradientDrawable background = new GradientDrawable();
-        background.setColor(BLACK);
+        background.setColor(Color.BLACK);
         background.setCornerRadius(dp(12));
-        background.setStroke(dp(1), Color.DKGRAY);
-
         button.setBackground(background);
 
         LinearLayout.LayoutParams params =
@@ -252,24 +241,21 @@ public class MainActivity extends Activity {
         params.setMargins(0, dp(3), 0, dp(3));
 
         layout.addView(button, params);
-
         button.setOnClickListener(v -> action.run());
     }
 
     private TextView createActionButton(String name) {
 
         TextView button = new TextView(this);
-
         button.setText(name);
         button.setTextColor(Color.WHITE);
         button.setTextSize(16);
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setClickable(true);
-        button.setFocusable(true);
 
         GradientDrawable background = new GradientDrawable();
-        background.setColor(BLACK);
+        background.setColor(Color.BLACK);
         background.setCornerRadius(dp(10));
 
         button.setBackground(background);
@@ -314,14 +300,10 @@ public class MainActivity extends Activity {
 
                     addTruckMarker(lat, lon);
 
-                    // SELECTARE DESTINATIE PRIN ATINGEREA HARTII
-
                     map.addOnMapClickListener(point -> {
-
                         setDestination(
                             point.getLatitude(),
                             point.getLongitude());
-
                         return true;
                     });
                 });
@@ -344,14 +326,12 @@ public class MainActivity extends Activity {
 
     private void updateTruckPosition() {
 
-        if (map == null || latitude == 0 || longitude == 0) {
-            return;
-        }
+        if (map == null || latitude == 0 || longitude == 0) return;
 
         addTruckMarker(latitude, longitude);
     }
 
-    // SELECTARE DESTINATIE
+    // DESTINATIE
 
     private void setDestination(double lat, double lon) {
 
@@ -368,20 +348,18 @@ public class MainActivity extends Activity {
             destinationMarker = map.addMarker(
                 new MarkerOptions()
                     .position(new LatLng(lat, lon))
-                    .title("DESTINATIE ALEASA"));
+                    .title("DESTINATIE"));
 
             map.setCameraPosition(
                 new CameraPosition.Builder()
                     .target(new LatLng(lat, lon))
-                    .zoom(15)
+                    .zoom(14)
                     .build());
         }
 
         Toast.makeText(this,
             "Destinatia a fost selectata.",
-            Toast.LENGTH_LONG).show();
-
-        showDestinationConfirmation();
+            Toast.LENGTH_SHORT).show();
     }
 
     private void showDestinationConfirmation() {
@@ -389,27 +367,18 @@ public class MainActivity extends Activity {
         if (!destinationSelected) return;
 
         String message =
-            "Destinatia selectata:\n\n" +
             "Latitudine: " + destinationLat + "\n" +
-            "Longitudine: " + destinationLon + "\n\n" +
-            "Doresti sa confirmi aceasta destinatie?";
+            "Longitudine: " + destinationLon +
+            "\n\nConfirma destinatia?";
 
         new AlertDialog.Builder(this)
             .setTitle("CONFIRMA DESTINATIA")
             .setMessage(message)
-            .setPositiveButton("CONFIRMA", (dialog, which) -> {
-                showTruckProfileConfirmation();
-            })
-            .setNegativeButton("ANULEAZA", (dialog, which) -> {
-                destinationSelected = false;
-                Toast.makeText(this,
-                    "Selectia a fost anulata.",
-                    Toast.LENGTH_SHORT).show();
-            })
+            .setPositiveButton("CONFIRMA",
+                (dialog, which) -> showTruckProfileConfirmation())
+            .setNegativeButton("ANULEAZA", null)
             .show();
     }
-
-    // CONFIRMARE PROFIL CAMION
 
     private void showTruckProfileConfirmation() {
 
@@ -419,32 +388,25 @@ public class MainActivity extends Activity {
             "Latime: 2,55 m\n" +
             "Lungime: 16,50 m\n" +
             "Greutate: 40 tone\n\n" +
-            "Acesta este profilul salvat.\n\n" +
-            "ATENTIE: Traseul afisat este demonstrativ. " +
-            "Nu verifica restrictiile rutiere si nu este " +
-            "destinat navigarii reale.";
+            "Datele hartilor si restrictiile pot fi incomplete. " +
+            "Verifica traseul si indicatoarele rutiere.";
 
         new AlertDialog.Builder(this)
             .setTitle("CONFIRMA PROFILUL CAMIONULUI")
             .setMessage(profile)
-            .setPositiveButton("CONFIRMA", (dialog, which) -> {
-                showDemoRoute();
-            })
-            .setNegativeButton("INAPOI", (dialog, which) -> {
-                Toast.makeText(this,
-                    "Navigarea demonstrativa nu a fost pornita.",
-                    Toast.LENGTH_SHORT).show();
-            })
+            .setPositiveButton("CALCULEAZA TRASEUL",
+                (dialog, which) -> requestTruckRoute())
+            .setNegativeButton("INAPOI", null)
             .show();
     }
 
-    // AFISARE LINIE DEMONSTRATIVA
+    // CALCUL TRASEU VALHALLA
 
-    private void showDemoRoute() {
+    private void requestTruckRoute() {
 
-        if (map == null) {
+        if (map == null || !destinationSelected) {
             Toast.makeText(this,
-                "Harta nu este pregatita.",
+                "Harta sau destinatia nu este disponibila.",
                 Toast.LENGTH_LONG).show();
             return;
         }
@@ -456,36 +418,248 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if (demoRoute != null) {
-            map.removePolyline(demoRoute);
-            demoRoute = null;
-        }
+        final double startLat = latitude;
+        final double startLon = longitude;
+        final double endLat = destinationLat;
+        final double endLon = destinationLon;
+
+        Toast.makeText(this,
+            "Se calculeaza traseul...",
+            Toast.LENGTH_LONG).show();
+
+        new Thread(() -> {
+
+            HttpURLConnection connection = null;
+
+            try {
+
+                URL url = new URL(
+                    "https://valhalla1.openstreetmap.de/route");
+
+                connection = (HttpURLConnection) url.openConnection();
+
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(40000);
+                connection.setDoOutput(true);
+
+                connection.setRequestProperty(
+                    "Content-Type", "application/json");
+
+                JSONObject truck = new JSONObject();
+                truck.put("height", 4.0);
+                truck.put("width", 2.55);
+                truck.put("length", 16.5);
+                truck.put("weight", 40.0);
+
+                JSONObject costingOptions = new JSONObject();
+                costingOptions.put("truck", truck);
+
+                JSONArray locations = new JSONArray();
+
+                JSONObject start = new JSONObject();
+                start.put("lat", startLat);
+                start.put("lon", startLon);
+                locations.put(start);
+
+                JSONObject end = new JSONObject();
+                end.put("lat", endLat);
+                end.put("lon", endLon);
+                locations.put(end);
+
+                JSONObject request = new JSONObject();
+                request.put("locations", locations);
+                request.put("costing", "truck");
+                request.put("costing_options", costingOptions);
+                request.put("units", "kilometers");
+                request.put("language", "ro-RO");
+                request.put("format", "json");
+                request.put("shape_format", "polyline6");
+                request.put("directions_type", "instructions");
+
+                OutputStream output = connection.getOutputStream();
+                output.write(request.toString().getBytes("UTF-8"));
+                output.flush();
+                output.close();
+
+                int responseCode = connection.getResponseCode();
+
+                java.io.InputStream input =
+                    responseCode >= 200 && responseCode < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+
+                BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(input, "UTF-8"));
+
+                StringBuilder response = new StringBuilder();
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+
+                reader.close();
+
+                if (responseCode != 200) {
+                    throw new Exception(
+                        "Server HTTP " + responseCode);
+                }
+
+                JSONObject result =
+                    new JSONObject(response.toString());
+
+                JSONObject trip = result.getJSONObject("trip");
+
+                JSONArray legs = trip.getJSONArray("legs");
+                JSONObject leg = legs.getJSONObject(0);
+
+                ArrayList<LatLng> points =
+                    decodePolyline6(leg.getString("shape"));
+
+                if (points.size() < 2) {
+                    throw new Exception("Traseu invalid.");
+                }
+
+                JSONObject summary = trip.getJSONObject("summary");
+
+                double distance = summary.optDouble("length", 0);
+                double seconds = summary.optDouble("time", 0);
+
+                JSONArray maneuvers =
+                    leg.optJSONArray("maneuvers");
+
+                StringBuilder instructions = new StringBuilder();
+
+                if (maneuvers != null) {
+
+                    for (int i = 0;
+                         i < maneuvers.length() && i < 12;
+                         i++) {
+
+                        JSONObject maneuver =
+                            maneuvers.getJSONObject(i);
+
+                        String instruction =
+                            maneuver.optString("instruction", "");
+
+                        if (!instruction.isEmpty()) {
+                            instructions.append(i + 1)
+                                .append(". ")
+                                .append(instruction)
+                                .append("\n\n");
+                        }
+                    }
+                }
+
+                final double finalDistance = distance;
+                final double finalSeconds = seconds;
+                final String finalInstructions =
+                    instructions.toString();
+
+                runOnUiThread(() -> {
+
+                    if (map == null) return;
+
+                    if (routeLine != null) {
+                        map.removePolyline(routeLine);
+                    }
+
+                    routeLine = map.addPolyline(
+                        new PolylineOptions()
+                            .addAll(points)
+                            .color(Color.BLUE)
+                            .width(6));
+
+                    map.setCameraPosition(
+                        new CameraPosition.Builder()
+                            .target(new LatLng(startLat, startLon))
+                            .zoom(10)
+                            .build());
+
+                    String message =
+                        "DISTANTA: " +
+                        String.format(Locale.US, "%.1f", finalDistance) +
+                        " km\n\n" +
+                        "DURATA ESTIMATA: " +
+                        (long) (finalSeconds / 60) +
+                        " minute\n\n" +
+                        "INDICATII RUTIERE:\n\n" +
+                        (finalInstructions.isEmpty()
+                            ? "Nu sunt disponibile indicatii."
+                            : finalInstructions) +
+                        "\nATENTIE: Verifica separat toate restrictiile " +
+                        "de inaltime, latime, lungime si greutate. " +
+                        "Traseul nu este o garantie de siguranta.";
+
+                    showMessage("TRASEU CALCULAT", message);
+                });
+
+            } catch (Exception e) {
+
+                runOnUiThread(() ->
+                    Toast.makeText(this,
+                        "Eroare la calcularea traseului: " +
+                        e.getMessage(),
+                        Toast.LENGTH_LONG).show());
+
+            } finally {
+
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+
+        }).start();
+    }
+
+    private ArrayList<LatLng> decodePolyline6(String encoded) {
 
         ArrayList<LatLng> points = new ArrayList<>();
 
-        points.add(new LatLng(latitude, longitude));
-        points.add(new LatLng(destinationLat, destinationLon));
+        int index = 0;
+        int lat = 0;
+        int lon = 0;
 
-        demoRoute = map.addPolyline(
-            new PolylineOptions()
-                .addAll(points)
-                .color(Color.BLUE)
-                .width(5));
+        while (index < encoded.length()) {
 
-        map.setCameraPosition(
-            new CameraPosition.Builder()
-                .target(new LatLng(destinationLat, destinationLon))
-                .zoom(10)
-                .build());
+            int result = 0;
+            int shift = 0;
+            int b;
 
-        showMessage(
-            "TRASEU DEMONSTRATIV",
-            "Linia albastra uneste pozitia camionului " +
-            "cu destinatia aleasa.\n\n" +
-            "Aceasta este o linie dreapta, nu un traseu " +
-            "pe drumuri.\n\n" +
-            "Nu folositi aceasta functie pentru conducerea " +
-            "camionului.");
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20 && index < encoded.length());
+
+            int deltaLat = (result & 1) != 0
+                ? ~(result >> 1)
+                : (result >> 1);
+
+            lat += deltaLat;
+
+            result = 0;
+            shift = 0;
+
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20 && index < encoded.length());
+
+            int deltaLon = (result & 1) != 0
+                ? ~(result >> 1)
+                : (result >> 1);
+
+            lon += deltaLon;
+
+            points.add(new LatLng(
+                lat / 1000000.0,
+                lon / 1000000.0));
+        }
+
+        return points;
     }
 
     // CAUTARE LOCATII
@@ -493,15 +667,9 @@ public class MainActivity extends Activity {
     private void searchPlaces(String category) {
 
         if (latitude == 0 || longitude == 0) {
-
-            if (status != null) {
-                status.setText("Asteptam pozitia GPS...");
-            }
-
             getGPS();
-
             Toast.makeText(this,
-                "Activeaza localizarea GPS.",
+                "Asteptam pozitia GPS.",
                 Toast.LENGTH_LONG).show();
             return;
         }
@@ -557,8 +725,7 @@ public class MainActivity extends Activity {
                 }
 
                 if (response == null) {
-                    if (lastError != null) throw lastError;
-                    throw new Exception("Serverele nu raspund.");
+                    throw new Exception("Serverele nu raspund.", lastError);
                 }
 
                 JSONObject json = new JSONObject(response);
@@ -580,7 +747,9 @@ public class MainActivity extends Activity {
 
                     } else if (item.has("center")) {
 
-                        JSONObject center = item.getJSONObject("center");
+                        JSONObject center =
+                            item.getJSONObject("center");
+
                         lat = center.getDouble("lat");
                         lon = center.getDouble("lon");
 
@@ -593,7 +762,8 @@ public class MainActivity extends Activity {
                     String name = "Locatie fara nume";
 
                     if (tags != null) {
-                        name = tags.optString("name",
+                        name = tags.optString(
+                            "name",
                             tags.optString("operator", name));
                     }
 
@@ -619,12 +789,11 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
 
                     if (status != null) {
-                        status.setText(
-                            "Cautarea nu este disponibila momentan.");
+                        status.setText("Cautarea nu este disponibila.");
                     }
 
                     Toast.makeText(this,
-                        "Serverele de cautare nu au raspuns. Incearca mai tarziu.",
+                        "Eroare la cautarea locatiilor.",
                         Toast.LENGTH_LONG).show();
                 });
             }
@@ -635,10 +804,8 @@ public class MainActivity extends Activity {
     private String postOverpass(String server, String query)
         throws Exception {
 
-        URL url = new URL(server);
-
         HttpURLConnection connection =
-            (HttpURLConnection) url.openConnection();
+            (HttpURLConnection) new URL(server).openConnection();
 
         try {
 
@@ -655,17 +822,18 @@ public class MainActivity extends Activity {
                 "User-Agent",
                 "GPS-ALEX-TRUCK-NAVI/1.0");
 
-            String data = "data=" + URLEncoder.encode(query, "UTF-8");
+            String data = "data=" +
+                URLEncoder.encode(query, "UTF-8");
 
             OutputStream output = connection.getOutputStream();
             output.write(data.getBytes("UTF-8"));
             output.flush();
             output.close();
 
-            int responseCode = connection.getResponseCode();
+            int code = connection.getResponseCode();
 
-            if (responseCode != 200) {
-                throw new Exception("HTTP " + responseCode);
+            if (code != 200) {
+                throw new Exception("HTTP " + code);
             }
 
             BufferedReader reader = new BufferedReader(
@@ -701,20 +869,17 @@ public class MainActivity extends Activity {
             Place p = places.get(i);
 
             names[i] = p.name + "\n" +
-                String.format("%.1f km", p.distance / 1000f);
+                String.format(Locale.US, "%.1f km",
+                    p.distance / 1000f);
         }
 
         status.setText("Au fost gasite " + places.size() + " locatii.");
 
-        String title;
-
-        if (category.equals("parking")) {
-            title = "PARCARI";
-        } else if (category.equals("fuel")) {
-            title = "MOTORINA";
-        } else {
-            title = "SERVICE CAMIOANE";
-        }
+        String title = category.equals("parking")
+            ? "PARCARI"
+            : category.equals("fuel")
+                ? "MOTORINA"
+                : "SERVICE CAMIOANE";
 
         new AlertDialog.Builder(this)
             .setTitle(title + " - 25 KM")
@@ -752,7 +917,6 @@ public class MainActivity extends Activity {
         addressInput.setSingleLine(true);
         addressInput.setTextSize(16);
         addressInput.setHint("Cauta adresa sau localitatea...");
-        addressInput.setPadding(dp(15), dp(8), dp(15), dp(8));
 
         screen.addView(addressInput,
             new LinearLayout.LayoutParams(-1, dp(50)));
@@ -766,7 +930,6 @@ public class MainActivity extends Activity {
         coordinateInput.setSingleLine(true);
         coordinateInput.setTextSize(16);
         coordinateInput.setHint("Coordonate: 45.4642, 9.1900");
-        coordinateInput.setPadding(dp(15), dp(8), dp(15), dp(8));
 
         screen.addView(coordinateInput,
             new LinearLayout.LayoutParams(-1, dp(50)));
@@ -778,7 +941,7 @@ public class MainActivity extends Activity {
             new LinearLayout.LayoutParams(-1, dp(42)));
 
         TextView navigateButton =
-            createActionButton("CONFIRMA SI AFISEAZA DEMONSTRATIA");
+            createActionButton("CONFIRMA SI CALCULEAZA TRASEUL");
 
         screen.addView(navigateButton,
             new LinearLayout.LayoutParams(-1, dp(42)));
@@ -786,7 +949,6 @@ public class MainActivity extends Activity {
         TextView mapHint = new TextView(this);
         mapHint.setText("Atinge harta pentru a selecta destinatia.");
         mapHint.setTextColor(Color.DKGRAY);
-        mapHint.setTextSize(13);
         mapHint.setGravity(Gravity.CENTER);
 
         screen.addView(mapHint,
@@ -806,6 +968,7 @@ public class MainActivity extends Activity {
         coordinateButton.setOnClickListener(v -> searchCoordinates());
 
         navigateButton.setOnClickListener(v -> {
+
             if (destinationSelected) {
                 showDestinationConfirmation();
             } else {
@@ -845,9 +1008,8 @@ public class MainActivity extends Activity {
                     "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" +
                     URLEncoder.encode(address, "UTF-8");
 
-                URL url = new URL(urlText);
-
-                connection = (HttpURLConnection) url.openConnection();
+                connection = (HttpURLConnection)
+                    new URL(urlText).openConnection();
 
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(15000);
@@ -890,7 +1052,7 @@ public class MainActivity extends Activity {
 
                 runOnUiThread(() ->
                     Toast.makeText(this,
-                        "Eroare la cautarea adresei. Incearca mai tarziu.",
+                        "Eroare la cautarea adresei.",
                         Toast.LENGTH_LONG).show());
 
             } finally {
@@ -900,7 +1062,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // COORDONATE GPS
+    // COORDONATE
 
     private void searchCoordinates() {
 
@@ -910,9 +1072,7 @@ public class MainActivity extends Activity {
 
             String[] parts = value.split("[,;\\s]+");
 
-            if (parts.length != 2) {
-                throw new Exception();
-            }
+            if (parts.length != 2) throw new Exception();
 
             double lat = Double.parseDouble(parts[0]);
             double lon = Double.parseDouble(parts[1]);
@@ -927,12 +1087,12 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
 
             Toast.makeText(this,
-                "Introdu coordonatele astfel: 45.4642, 9.1900",
+                "Introdu: 45.4642, 9.1900",
                 Toast.LENGTH_LONG).show();
         }
     }
 
-    // GOOGLE MAPS RAMANE PENTRU ORIENTARE SI CAUTARE
+    // GOOGLE MAPS PENTRU ORIENTARE
 
     private void openGoogleMaps(double lat, double lon) {
 
@@ -941,6 +1101,7 @@ public class MainActivity extends Activity {
             lat + "," + lon;
 
         try {
+
             android.content.Intent intent =
                 new android.content.Intent(
                     android.content.Intent.ACTION_VIEW,
@@ -949,6 +1110,7 @@ public class MainActivity extends Activity {
             startActivity(intent);
 
         } catch (Exception e) {
+
             Toast.makeText(this,
                 "Google Maps nu este disponibil.",
                 Toast.LENGTH_LONG).show();
@@ -1030,7 +1192,7 @@ public class MainActivity extends Activity {
                 String provider, int status, Bundle extras) {}
         };
 
-    // GESTIONAREA HARTII
+    // CICLU HARTA
 
     private void destroyCurrentMap() {
 
@@ -1044,7 +1206,7 @@ public class MainActivity extends Activity {
         map = null;
         truckMarker = null;
         destinationMarker = null;
-        demoRoute = null;
+        routeLine = null;
     }
 
     private void returnHome() {
