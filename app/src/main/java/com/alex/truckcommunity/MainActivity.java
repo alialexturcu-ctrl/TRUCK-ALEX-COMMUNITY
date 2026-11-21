@@ -5,10 +5,10 @@ import android.app.AlertDialog;
 import android.os.Bundle;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Button;
 
 public class MainActivity extends Activity {
 
@@ -20,56 +20,63 @@ public class MainActivity extends Activity {
 
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(25, 35, 25, 25);
-        layout.setBackgroundColor(Color.rgb(15, 20, 28));
+        layout.setPadding(20, 30, 20, 20);
+        layout.setBackgroundColor(Color.rgb(13, 19, 29));
 
         TextView title = new TextView(this);
         title.setText("TRUCK ALEX COMMUNITY");
-        title.setTextSize(25);
         title.setTextColor(Color.WHITE);
-        title.setTypeface(null, Typeface.BOLD);
+        title.setTextSize(25);
         title.setGravity(Gravity.CENTER);
-
+        title.setTypeface(null, Typeface.BOLD);
         layout.addView(title);
 
-        addButton("HARTA GPS", "Navigatia GPS va fi adaugata ulterior.");
-        addButton("PROFIL TIR",
-                "INALTIME: 4,00 m\nLATIME: 2,55 m\nLUNGIME: 16,50 m\nGREUTATE: 40 tone");
+        TextView subtitle = new TextView(this);
+        subtitle.setText("CAMION • GPS • NAVIGATIE");
+        subtitle.setTextColor(Color.LTGRAY);
+        subtitle.setTextSize(14);
+        subtitle.setGravity(Gravity.CENTER);
+        layout.addView(subtitle);
 
-        addButton("CAMION RIGID",
-                "INALTIME: 3,50 m\nLATIME: 2,55 m\nLUNGIME: 8,00 m\nGREUTATE: 18 tone\n2 axe");
-
-        addButton("SETARI CAMION",
-                "Alege profilul TIR sau camion rigid.");
-
-        addButton("VOCE ROMANA",
-                "Vocea romana va fi configurata intr-o etapa viitoare.");
-
-        addButton("DESPRE APLICATIE",
-                "TRUCK ALEX COMMUNITY\nVersiunea 1.0");
+        addPanel("HARTA GPS", "Navigatia GPS va fi adaugata ulterior.");
+        addPanel("PROFIL TIR", "INALTIME: 4,00 m\nLATIME: 2,55 m\nLUNGIME: 16,50 m\nGREUTATE: 40 tone");
+        addPanel("CAMION RIGID", "INALTIME: 3,50 m\nLATIME: 2,55 m\nLUNGIME: 8,00 m\nGREUTATE: 18 tone\n2 axe");
+        addPanel("SETARI CAMION", "Alege profilul TIR sau camion rigid.");
+        addPanel("VOCE ROMANA", "Vocea romana va fi configurata ulterior.");
+        addPanel("DESPRE APLICATIE", "TRUCK ALEX COMMUNITY\nVersiunea 1.0");
 
         setContentView(layout);
     }
 
-    private void addButton(String name, String message) {
-        Button button = new Button(this);
-        button.setText(name);
-        button.setTextSize(17);
-        button.setTextColor(Color.WHITE);
-        button.setBackgroundColor(Color.rgb(35, 100, 160));
+    private void addPanel(String name, String message) {
+
+        TextView panel = new TextView(this);
+        panel.setText(name);
+        panel.setTextColor(Color.WHITE);
+        panel.setTextSize(18);
+        panel.setTypeface(null, Typeface.BOLD);
+        panel.setGravity(Gravity.CENTER);
+        panel.setPadding(15, 15, 15, 15);
+
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.rgb(30, 75, 115));
+        background.setCornerRadius(20);
+        background.setStroke(2, Color.rgb(70, 150, 210));
+
+        panel.setBackground(background);
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 65);
+            new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 65);
 
-        params.setMargins(0, 18, 0, 0);
-        layout.addView(button, params);
+        params.setMargins(0, 15, 0, 0);
+        layout.addView(panel, params);
 
-        button.setOnClickListener(v ->
-                new AlertDialog.Builder(this)
-                        .setTitle(name)
-                        .setMessage(message)
-                        .setPositiveButton("INCHIDE", null)
-                        .show());
+        panel.setOnClickListener(v ->
+            new AlertDialog.Builder(this)
+                .setTitle(name)
+                .setMessage(message)
+                .setPositiveButton("INCHIDE", null)
+                .show());
     }
 }
