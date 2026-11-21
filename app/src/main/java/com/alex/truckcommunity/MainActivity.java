@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.ScrollView;
 
 public class MainActivity extends Activity {
 
@@ -18,15 +19,17 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        ScrollView scroll = new ScrollView(this);
+
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(20, 30, 20, 20);
+        layout.setPadding(20, 30, 20, 30);
         layout.setBackgroundColor(Color.rgb(13, 19, 29));
 
         TextView title = new TextView(this);
         title.setText("TRUCK ALEX COMMUNITY");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(25);
+        title.setTextSize(26);
         title.setGravity(Gravity.CENTER);
         title.setTypeface(null, Typeface.BOLD);
         layout.addView(title);
@@ -34,7 +37,7 @@ public class MainActivity extends Activity {
         TextView subtitle = new TextView(this);
         subtitle.setText("CAMION • GPS • NAVIGATIE");
         subtitle.setTextColor(Color.LTGRAY);
-        subtitle.setTextSize(14);
+        subtitle.setTextSize(16);
         subtitle.setGravity(Gravity.CENTER);
         layout.addView(subtitle);
 
@@ -45,7 +48,8 @@ public class MainActivity extends Activity {
         addPanel("VOCE ROMANA", "Vocea romana va fi configurata ulterior.");
         addPanel("DESPRE APLICATIE", "TRUCK ALEX COMMUNITY\nVersiunea 1.0");
 
-        setContentView(layout);
+        scroll.addView(layout);
+        setContentView(scroll);
     }
 
     private void addPanel(String name, String message) {
@@ -53,7 +57,7 @@ public class MainActivity extends Activity {
         TextView panel = new TextView(this);
         panel.setText(name);
         panel.setTextColor(Color.WHITE);
-        panel.setTextSize(18);
+        panel.setTextSize(21);
         panel.setTypeface(null, Typeface.BOLD);
         panel.setGravity(Gravity.CENTER);
         panel.setPadding(15, 15, 15, 15);
@@ -61,15 +65,15 @@ public class MainActivity extends Activity {
         GradientDrawable background = new GradientDrawable();
         background.setColor(Color.rgb(30, 75, 115));
         background.setCornerRadius(20);
-        background.setStroke(2, Color.rgb(70, 150, 210));
+        background.setStroke(3, Color.rgb(70, 150, 210));
 
         panel.setBackground(background);
 
         LinearLayout.LayoutParams params =
             new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 65);
+                LinearLayout.LayoutParams.MATCH_PARENT, 95);
 
-        params.setMargins(0, 15, 0, 0);
+        params.setMargins(0, 18, 0, 0);
         layout.addView(panel, params);
 
         panel.setOnClickListener(v ->
