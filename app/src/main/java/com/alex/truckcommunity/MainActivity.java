@@ -452,7 +452,7 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onLowMemory() {
+    public void onLowMemory() {
         super.onLowMemory();
         if (mapView != null) mapView.onLowMemory();
     }
