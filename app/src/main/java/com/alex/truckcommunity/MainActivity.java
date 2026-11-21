@@ -1,5 +1,5 @@
 
-package com.alex.gpscamion;
+package com.alex.truckcommunity;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -26,6 +26,14 @@ public class MainActivity extends Activity {
     private LocationManager locationManager;
     private TextToSpeech voice;
     private boolean voiceReady = false;
+
+    private final LocationListener locationListener =
+            new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {
+                    updateGPS(location);
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,14 +73,14 @@ public class MainActivity extends Activity {
         layout.setBackgroundColor(Color.rgb(15, 23, 35));
 
         TextView title = new TextView(this);
-        title.setText("GPS CAMION");
-        title.setTextSize(30);
+        title.setText("TRUCK ALEX COMMUNITY");
+        title.setTextSize(25);
         title.setTextColor(Color.WHITE);
         title.setGravity(Gravity.CENTER);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("TRUCK ALEX COMMUNITY");
-        subtitle.setTextSize(14);
+        subtitle.setText("GPS PENTRU CAMIOANE");
+        subtitle.setTextSize(15);
         subtitle.setTextColor(Color.LTGRAY);
         subtitle.setGravity(Gravity.CENTER);
 
@@ -100,8 +108,8 @@ public class MainActivity extends Activity {
 
         Button voiceButton = new Button(this);
         voiceButton.setText("TESTEAZĂ VOCEA");
-        voiceButton.setOnClickListener(v -> speak(
-                "Bun venit în aplicația GPS Camion."));
+        voiceButton.setOnClickListener(v ->
+                speak("Bun venit în aplicația Truck Alex Community."));
 
         layout.addView(title);
         layout.addView(subtitle);
@@ -129,32 +137,28 @@ public class MainActivity extends Activity {
                     LocationManager.GPS_PROVIDER,
                     1000,
                     1,
-                    new LocationListener() {
-
-                        @Override
-                        public void onLocationChanged(Location location) {
-
-                            float speed = location.hasSpeed()
-                                    ? location.getSpeed() * 3.6f : 0;
-
-                            speedText.setText(
-                                    String.format(Locale.getDefault(),
-                                            "%.0f km/h", speed));
-
-                            gpsText.setText(
-                                    "Latitudine: " + location.getLatitude()
-                                    + "\nLongitudine: "
-                                    + location.getLongitude());
-
-                            statusText.setText("GPS ACTIV");
-                        }
-                    });
+                    locationListener);
 
             statusText.setText("Se caută semnal GPS...");
 
         } catch (SecurityException e) {
             statusText.setText("Permisiune GPS indisponibilă");
         }
+    }
+
+    private void updateGPS(Location location) {
+
+        float speed = location.hasSpeed()
+                ? location.getSpeed() * 3.6f : 0;
+
+        speedText.setText(
+                String.format(Locale.getDefault(), "%.0f km/h", speed));
+
+        gpsText.setText(
+                "Latitudine: " + location.getLatitude()
+                + "\nLongitudine: " + location.getLongitude());
+
+        statusText.setText("GPS ACTIV");
     }
 
     private void speak(String message) {
@@ -194,11 +198,4 @@ public class MainActivity extends Activity {
 
         super.onDestroy();
     }
-
-    private final LocationListener locationListener =
-            new LocationListener() {
-                @Override
-                public void onLocationChanged(Location location) {
-                }
-            };
 }
