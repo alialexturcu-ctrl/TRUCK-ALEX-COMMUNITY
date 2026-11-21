@@ -8,12 +8,11 @@
 
     <application
         android:allowBackup="true"
-        android:label="TRUCK ALEX COMMUNITY"
-        android:theme="@android:style/Theme.Material.NoActionBar"
-        android:usesCleartextTraffic="false">
+        android:label="GPS CAMION"
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.alex.gpscamion.MainActivity"
             android:exported="true">
 
             <intent-filter>
@@ -24,5 +23,4 @@
         </activity>
 
     </application>
-
 </manifest>
