@@ -8,11 +8,11 @@
 
     <application
         android:allowBackup="true"
-        android:label="GPS CAMION"
+        android:label="TRUCK ALEX COMMUNITY"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
-            android:name="com.alex.gpscamion.MainActivity"
+            android:name="com.alex.truckcommunity.MainActivity"
             android:exported="true">
 
             <intent-filter>
