@@ -9,10 +9,11 @@
     <application
         android:allowBackup="true"
         android:label="TRUCK ALEX COMMUNITY"
+        android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
-            android:name="com.alex.truckcommunity.MainActivity"
+            android:name=".MainActivity"
             android:exported="true">
 
             <intent-filter>
@@ -23,4 +24,5 @@
         </activity>
 
     </application>
+
 </manifest>
