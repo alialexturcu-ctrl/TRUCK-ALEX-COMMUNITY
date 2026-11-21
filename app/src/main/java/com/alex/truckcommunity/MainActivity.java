@@ -97,6 +97,9 @@ public class MainActivity extends Activity
 
     private final int WHITE = Color.WHITE;
 
+    private final int BUTTON_BLACK =
+            Color.rgb(10, 14, 18);
+
     private boolean changingDestination = false;
 
     @Override
@@ -113,9 +116,7 @@ public class MainActivity extends Activity
         checkLocationPermission();
     }
 
-    // ------------------------------------------------
     // HARTA
-    // ------------------------------------------------
 
     private void createMap() {
 
@@ -135,9 +136,7 @@ public class MainActivity extends Activity
         );
     }
 
-    // ------------------------------------------------
-    // INTERFATA MODERNA
-    // ------------------------------------------------
+    // INTERFATA
 
     private void createInterface() {
 
@@ -146,9 +145,7 @@ public class MainActivity extends Activity
         root.setBackgroundColor(BACKGROUND);
 
         FrameLayout.LayoutParams mapParams =
-                new FrameLayout.LayoutParams(
-                        -1, -1
-                );
+                new FrameLayout.LayoutParams(-1, -1);
 
         root.addView(map, mapParams);
 
@@ -156,15 +153,9 @@ public class MainActivity extends Activity
 
         LinearLayout topPanel = new LinearLayout(this);
 
-        topPanel.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
+        topPanel.setOrientation(LinearLayout.VERTICAL);
         topPanel.setPadding(14, 10, 14, 10);
-
-        topPanel.setBackground(
-                rounded(PANEL, 20)
-        );
+        topPanel.setBackground(rounded(PANEL, 20));
 
         TextView title = new TextView(this);
 
@@ -211,18 +202,13 @@ public class MainActivity extends Activity
 
         LinearLayout.LayoutParams half =
                 new LinearLayout.LayoutParams(
-                        0, 43, 1
+                        0, 54, 1
                 );
 
         half.setMargins(3, 3, 3, 3);
 
-        searchButtons.addView(
-                coordinateButton, half
-        );
-
-        searchButtons.addView(
-                mapButton, half
-        );
+        searchButtons.addView(coordinateButton, half);
+        searchButtons.addView(mapButton, half);
 
         topPanel.addView(searchButtons);
 
@@ -237,8 +223,7 @@ public class MainActivity extends Activity
         routeButton =
                 createButton("CALCULEAZĂ TRASEUL");
 
-        routeButton.setTextSize(14);
-        routeButton.setTypeface(null, Typeface.BOLD);
+        routeButton.setTextSize(15);
 
         topPanel.addView(routeButton);
 
@@ -265,10 +250,7 @@ public class MainActivity extends Activity
         );
 
         sidePanel.setPadding(4, 4, 4, 4);
-
-        sidePanel.setBackground(
-                rounded(PANEL, 16)
-        );
+        sidePanel.setBackground(rounded(PANEL, 16));
 
         Button zoomIn = createSideButton("+");
         Button zoomOut = createSideButton("−");
@@ -292,7 +274,7 @@ public class MainActivity extends Activity
 
         FrameLayout.LayoutParams sideParams =
                 new FrameLayout.LayoutParams(
-                        68,
+                        90,
                         -2,
                         Gravity.RIGHT | Gravity.CENTER_VERTICAL
                 );
@@ -311,10 +293,7 @@ public class MainActivity extends Activity
         );
 
         bottomPanel.setPadding(14, 10, 14, 10);
-
-        bottomPanel.setBackground(
-                rounded(PANEL, 20)
-        );
+        bottomPanel.setBackground(rounded(PANEL, 20));
 
         statusText = createText(
                 "●  Aștept poziția GPS..."
@@ -376,18 +355,13 @@ public class MainActivity extends Activity
 
         LinearLayout.LayoutParams buttonParams =
                 new LinearLayout.LayoutParams(
-                        0, 45, 1
+                        0, 54, 1
                 );
 
         buttonParams.setMargins(3, 3, 3, 3);
 
-        bottomButtons.addView(
-                voiceButton, buttonParams
-        );
-
-        bottomButtons.addView(
-                maneuversButton, buttonParams
-        );
+        bottomButtons.addView(voiceButton, buttonParams);
+        bottomButtons.addView(maneuversButton, buttonParams);
 
         bottomPanel.addView(bottomButtons);
 
@@ -445,9 +419,7 @@ public class MainActivity extends Activity
                     }
 
                     @Override
-                    public void afterTextChanged(
-                            Editable s
-                    ) {
+                    public void afterTextChanged(Editable s) {
                     }
                 }
         );
@@ -457,15 +429,9 @@ public class MainActivity extends Activity
 
         LinearLayout box = new LinearLayout(this);
 
-        box.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
+        box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(8, 8, 8, 8);
-
-        box.setBackground(
-                rounded(PANEL_LIGHT, 12)
-        );
+        box.setBackground(rounded(PANEL_LIGHT, 12));
 
         TextView heading = createText(label);
 
@@ -495,14 +461,10 @@ public class MainActivity extends Activity
         input.setTextSize(13);
         input.setPadding(12, 2, 12, 2);
 
-        input.setBackground(
-                rounded(PANEL_LIGHT, 12)
-        );
+        input.setBackground(rounded(PANEL_LIGHT, 12));
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        -1, 45
-                );
+                new LinearLayout.LayoutParams(-1, 45);
 
         params.setMargins(0, 4, 0, 4);
 
@@ -523,18 +485,24 @@ public class MainActivity extends Activity
         return text;
     }
 
+    // BUTOANE NEGRE CU TEXT ALB
+
     private Button createButton(String value) {
 
         Button button = new Button(this);
 
         button.setText(value);
-        button.setTextColor(WHITE);
-        button.setTextSize(11);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(14);
         button.setAllCaps(false);
         button.setTypeface(null, Typeface.BOLD);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(10, 8, 10, 8);
+        button.setMinHeight(54);
+        button.setMinimumHeight(54);
 
         button.setBackground(
-                rounded(GREEN, 12)
+                rounded(BUTTON_BLACK, 12)
         );
 
         return button;
@@ -544,14 +512,12 @@ public class MainActivity extends Activity
 
         Button button = createButton(value);
 
-        button.setTextSize(17);
+        button.setTextSize(15);
 
         LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        -1, 48
-                );
+                new LinearLayout.LayoutParams(-1, 58);
 
-        params.setMargins(2, 3, 2, 3);
+        params.setMargins(3, 4, 3, 4);
 
         button.setLayoutParams(params);
 
@@ -572,9 +538,7 @@ public class MainActivity extends Activity
         return drawable;
     }
 
-    // ------------------------------------------------
     // VOCE
-    // ------------------------------------------------
 
     private void initializeVoice() {
 
@@ -590,10 +554,8 @@ public class MainActivity extends Activity
                                 );
 
                         ttsReady =
-                                language !=
-                                TextToSpeech.LANG_MISSING_DATA &&
-                                language !=
-                                TextToSpeech.LANG_NOT_SUPPORTED;
+                                language != TextToSpeech.LANG_MISSING_DATA &&
+                                language != TextToSpeech.LANG_NOT_SUPPORTED;
                     }
                 }
         );
@@ -652,8 +614,7 @@ public class MainActivity extends Activity
             return;
         }
 
-        StringBuilder message =
-                new StringBuilder();
+        StringBuilder message = new StringBuilder();
 
         for (int i = 0; i < instructions.size(); i++) {
 
@@ -679,9 +640,7 @@ public class MainActivity extends Activity
                 .show();
     }
 
-    // ------------------------------------------------
     // GPS
-    // ------------------------------------------------
 
     private void checkLocationPermission() {
 
@@ -719,8 +678,7 @@ public class MainActivity extends Activity
         if (requestCode == LOCATION_PERMISSION) {
 
             if (results.length > 0 &&
-                    results[0] ==
-                    PackageManager.PERMISSION_GRANTED) {
+                    results[0] == PackageManager.PERMISSION_GRANTED) {
 
                 startGps();
 
@@ -811,7 +769,6 @@ public class MainActivity extends Activity
         if (gpsMarker == null) {
 
             gpsMarker = new Marker(map);
-
             gpsMarker.setTitle("Poziția mea");
 
             map.getOverlays().add(gpsMarker);
@@ -853,9 +810,7 @@ public class MainActivity extends Activity
         map.getController().setZoom(15.0);
     }
 
-    // ------------------------------------------------
     // SELECTARE DESTINATIE
-    // ------------------------------------------------
 
     private void selectDestinationOnMap() {
 
@@ -867,9 +822,7 @@ public class MainActivity extends Activity
     }
 
     @Override
-    public boolean singleTapConfirmedHelper(
-            GeoPoint point
-    ) {
+    public boolean singleTapConfirmedHelper(GeoPoint point) {
 
         destinationPoint = point;
 
@@ -920,10 +873,7 @@ public class MainActivity extends Activity
 
         LinearLayout layout = new LinearLayout(this);
 
-        layout.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
+        layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 10, 20, 10);
 
         EditText latitude = createInput("Latitudine");
@@ -1002,17 +952,14 @@ public class MainActivity extends Activity
                 .show();
     }
 
-    // ------------------------------------------------
     // CALCUL TRASEU
-    // ------------------------------------------------
 
     private void calculateRoute() {
 
         String destination =
                 destinationInput.getText().toString().trim();
 
-        if (destinationPoint == null &&
-                destination.isEmpty()) {
+        if (destinationPoint == null && destination.isEmpty()) {
 
             Toast.makeText(
                     this,
@@ -1028,8 +975,7 @@ public class MainActivity extends Activity
         String startAddress =
                 startInput.getText().toString().trim();
 
-        if (locationSnapshot == null &&
-                startAddress.isEmpty()) {
+        if (locationSnapshot == null && startAddress.isEmpty()) {
 
             Toast.makeText(
                     this,
@@ -1174,9 +1120,7 @@ public class MainActivity extends Activity
         JSONObject response =
                 new JSONObject(httpGet(url));
 
-        if (!"Ok".equals(
-                response.optString("code")
-        )) {
+        if (!"Ok".equals(response.optString("code"))) {
             throw new Exception(
                     "Serverul nu a găsit traseul."
             );
@@ -1415,9 +1359,7 @@ public class MainActivity extends Activity
         return "Continuă pe traseu";
     }
 
-    // ------------------------------------------------
-    // CONEXIUNE INTERNET
-    // ------------------------------------------------
+    // INTERNET
 
     private String httpGet(String address)
             throws Exception {
@@ -1432,7 +1374,6 @@ public class MainActivity extends Activity
                     (HttpURLConnection) url.openConnection();
 
             connection.setRequestMethod("GET");
-
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(20000);
 
@@ -1483,9 +1424,7 @@ public class MainActivity extends Activity
         }
     }
 
-    // ------------------------------------------------
     // CICLU DE VIATA
-    // ------------------------------------------------
 
     @Override
     protected void onResume() {
